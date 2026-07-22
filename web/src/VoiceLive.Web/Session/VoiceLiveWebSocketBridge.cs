@@ -136,6 +136,24 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                 case SessionUpdateResponseDone:
                     await SendJsonAsync(socket, new { t = "response-done" }, ct);
                     break;
+                case SessionUpdateResponseFunctionCallArgumentsDelta fnDelta:
+                    await SendToolAsync(socket, "args", name: null, fnDelta.CallId, ct);
+                    break;
+                case SessionUpdateResponseFunctionCallArgumentsDone fnDone:
+                    logger.LogInformation("Agent tool call: {Name} (callId {CallId})", fnDone.Name, fnDone.CallId);
+                    await SendToolAsync(socket, "done", fnDone.Name, fnDone.CallId, ct);
+                    break;
+                case SessionUpdateMcpListToolsInProgress mcpStart:
+                    await SendToolAsync(socket, "list", name: null, mcpStart.ItemId, ct);
+                    break;
+                case SessionUpdateMcpListToolsCompleted mcpDone:
+                    logger.LogInformation("Agent MCP tools listed (itemId {ItemId})", mcpDone.ItemId);
+                    await SendToolAsync(socket, "list-done", name: null, mcpDone.ItemId, ct);
+                    break;
+                case SessionUpdateMcpListToolsFailed mcpFail:
+                    logger.LogWarning("Agent MCP tool listing failed (itemId {ItemId})", mcpFail.ItemId);
+                    await SendToolAsync(socket, "list-failed", name: null, mcpFail.ItemId, ct);
+                    break;
                 case SessionUpdateError error:
                     var message = error.Error is null
                         ? "Voice Live service reported an error."
@@ -235,6 +253,9 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
             _sendLock.Release();
         }
     }
+
+    private Task SendToolAsync(WebSocket socket, string phase, string? name, string? callId, CancellationToken ct)
+        => SendJsonAsync(socket, new ToolNotification(phase, name, callId), ct);
 
     private async Task SendErrorAndCloseAsync(WebSocket socket, string message, CancellationToken ct)
     {
