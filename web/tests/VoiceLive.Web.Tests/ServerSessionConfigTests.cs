@@ -48,4 +48,11 @@ public class ServerSessionConfigTests
         Assert.Equal(1920, options.Avatar.Video.Resolution.Width);
         Assert.Equal(1080, options.Avatar.Video.Resolution.Height);
     }
+
+    [Fact]
+    public void LoadServerSession_defaults_mode_to_model()
+    {
+        var config = WebConfigLoader.LoadServerSession(RepoConfigDir);
+        Assert.Equal("model", config.Mode);
+    }
 }

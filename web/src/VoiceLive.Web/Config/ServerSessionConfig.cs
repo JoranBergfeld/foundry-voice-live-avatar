@@ -19,7 +19,8 @@ public sealed record ServerSessionConfig(
     ServerTranscriptionConfig? InputAudioTranscription,
     ServerTurnTakingConfig TurnTaking,
     ServerAvatarConfig Avatar,
-    ServerAgentConfig Agent);
+    ServerAgentConfig Agent,
+    string Mode);
 
 public sealed record ServerEouDetectionConfig(string Model, string? ThresholdLevel = null, int? TimeoutMs = null);
 public sealed record ServerTurnDetectionConfig(
@@ -70,6 +71,8 @@ public static partial class WebConfigLoader
             }
             if (session.InputAudioSamplingRate <= 0)
                 errors.Add("session.json: inputAudioSamplingRate: must be greater than zero");
+            if (session.Mode is not null && !SessionModeResolver.IsValid(session.Mode))
+                errors.Add($"session.json: mode: '{session.Mode}' is not one of {SessionModeResolver.Model}, {SessionModeResolver.Agent}");
         }
 
         if (turn is not null)
@@ -109,7 +112,8 @@ public static partial class WebConfigLoader
             session.InputAudioTranscription is null ? null : new ServerTranscriptionConfig(session.InputAudioTranscription.Model!, session.InputAudioTranscription.Language),
             new ServerTurnTakingConfig(turn!.ActiveMode!, turn.Modes!),
             new ServerAvatarConfig(avatar!.Character!, avatar.Style!, avatar.Customized, avatar.Video),
-            new ServerAgentConfig(agent!.AgentName!, agent.AgentProjectName!, agent.SafeQuestions!));
+            new ServerAgentConfig(agent!.AgentName!, agent.AgentProjectName!, agent.SafeQuestions!),
+            SessionModeResolver.Normalize(session!.Mode));
     }
 
     private static readonly JsonSerializerOptions ServerOpts = new()
@@ -154,7 +158,8 @@ public static partial class WebConfigLoader
         int InputAudioSamplingRate,
         ServerNoiseReductionFile? InputAudioNoiseReduction,
         ServerEchoCancellationFile? InputAudioEchoCancellation,
-        ServerTranscriptionFile? InputAudioTranscription);
+        ServerTranscriptionFile? InputAudioTranscription,
+        string? Mode);
 
     private sealed record ServerVoiceFile(string? Type, string? Name, double? Temperature = null, string? Rate = null, string? Style = null);
     private sealed record ServerNoiseReductionFile(string? Type);

@@ -2,6 +2,7 @@
   "endpoint": "https://testlab-f.services.ai.azure.com",
   "region": "swedencentral",
   "apiVersion": "2025-10-01",
+  "mode": "model",
   "model": "gpt-realtime",
   "voice": { "type": "azure-realtime-native", "name": "en-US-AndrewNeural" },
   "inputAudioSamplingRate": 24000,
