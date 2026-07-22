@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Voice Live Avatar</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+      }
+
+      .operator-shell {
+        display: grid;
+        gap: 1rem;
+        max-width: 48rem;
+        padding: 2rem;
+      }
+
+      .operator-shell label,
+      .panic-controls {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      body.display-view {
+        background: #000;
+      }
+
+      body.display-view #avatar {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        object-fit: cover;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
