@@ -65,6 +65,21 @@ public class ConfigLoaderTests
     }
 
     [Fact]
+    public void Fails_when_required_session_object_missing()
+    {
+        var files = Valid();
+        files["session.json"] = """
+        {"endpoint":"wss://x.services.ai.azure.com","region":"swedencentral","apiVersion":"2026-04-10","model":"gpt-realtime",
+         "voice":{"type":"azure-realtime-native","name":"andrew"},"inputAudioSamplingRate":24000,
+         "inputAudioTranscription":{"model":"azure-speech","language":"en"}}
+        """;
+        var ex = Assert.Throws<ConfigValidationException>(() => ConfigLoader.Load(WriteTemp(files)));
+        Assert.Contains("session.json", ex.Message);
+        Assert.Contains("inputAudioNoiseReduction", ex.Message);
+        Assert.Contains("inputAudioEchoCancellation", ex.Message);
+    }
+
+    [Fact]
     public void Fails_with_missing_file_naming_the_file()
     {
         var files = Valid(); files.Remove("agent.json");

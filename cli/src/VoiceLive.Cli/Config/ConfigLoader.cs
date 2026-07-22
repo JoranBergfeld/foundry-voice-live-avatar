@@ -30,6 +30,9 @@ public static class ConfigLoader
             if (string.IsNullOrWhiteSpace(session.Endpoint)) errors.Add("session.json: endpoint is required");
             if (session.Voice is null || string.IsNullOrWhiteSpace(session.Voice.Type)) errors.Add("session.json: voice.type is required");
             else if (!VoiceTypes.Contains(session.Voice.Type)) errors.Add($"session.json: voice.type '{session.Voice.Type}' is not one of {string.Join(", ", VoiceTypes)}");
+            if (session.InputAudioNoiseReduction is null || string.IsNullOrWhiteSpace(session.InputAudioNoiseReduction.Type)) errors.Add("session.json: inputAudioNoiseReduction.type is required");
+            if (session.InputAudioEchoCancellation is null || string.IsNullOrWhiteSpace(session.InputAudioEchoCancellation.Type)) errors.Add("session.json: inputAudioEchoCancellation.type is required");
+            if (session.InputAudioTranscription is null || string.IsNullOrWhiteSpace(session.InputAudioTranscription.Model)) errors.Add("session.json: inputAudioTranscription.model is required");
         }
         if (turn is not null)
         {
