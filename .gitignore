@@ -1,0 +1,11 @@
+# .NET
+bin/
+obj/
+*.user
+# Node
+node_modules/
+web/src/VoiceLive.Web/wwwroot/app.js
+web/src/VoiceLive.Web/wwwroot/app.js.map
+# OS/editor
+.DS_Store
+.vs/
