@@ -80,7 +80,8 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                                 safeQuestions = config.Agent.SafeQuestions,
                                 avatarCharacter = config.Avatar.Character,
                                 avatarStyle = config.Avatar.Style
-                            }
+                            },
+                            iceServers = _iceServers
                         }, ct);
                     }
                     break;
@@ -103,7 +104,7 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                     await SendJsonAsync(socket, new { t = "avatar-idle" }, ct);
                     break;
                 case SessionUpdateAvatarConnecting avatar:
-                    await SendJsonAsync(socket, new { t = "avatar-answer", sdp = avatar.ServerSdp, iceServers = _iceServers }, ct);
+                    await SendJsonAsync(socket, new { t = "avatar-answer", sdp = avatar.ServerSdp }, ct);
                     break;
                 case SessionUpdateResponseAudioTranscriptDelta transcript:
                     await SendJsonAsync(socket, new { t = "agent-transcript", text = transcript.Delta, final = false }, ct);
