@@ -17,7 +17,7 @@ public sealed record ClientConfig(
 
 public sealed class WebConfigValidationException(string message) : Exception(message);
 
-public static class WebConfigLoader
+public static partial class WebConfigLoader
 {
     private static readonly JsonSerializerOptions Opts = new()
     {
