@@ -30,9 +30,20 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                 new DefaultAzureCredential(),
                 new VoiceLiveClientOptions(serviceVersion));
 
-            session = await client.StartSessionAsync(config.Model, cts.Token);
-            var sessionOptions = SessionOptionsBuilder.Build(config, "You are a helpful assistant. Reply in concise, spoken sentences.");
-            await session.ConfigureSessionAsync(sessionOptions, cts.Token);
+            if (config.Mode == "agent")
+            {
+                logger.LogInformation("Starting Voice Live session in AGENT mode ({Agent} / {Project})", config.Agent.AgentName, config.Agent.AgentProjectName);
+                var agent = new AgentSessionConfig(config.Agent.AgentName, config.Agent.AgentProjectName);
+                session = await client.StartSessionAsync(SessionTarget.FromAgent(agent), cts.Token);
+                await session.ConfigureSessionAsync(SessionOptionsBuilder.BuildForAgent(config), cts.Token);
+            }
+            else
+            {
+                logger.LogInformation("Starting Voice Live session in MODEL mode ({Model})", config.Model);
+                session = await client.StartSessionAsync(config.Model, cts.Token);
+                var sessionOptions = SessionOptionsBuilder.Build(config, "You are a helpful assistant. Reply in concise, spoken sentences.");
+                await session.ConfigureSessionAsync(sessionOptions, cts.Token);
+            }
 
             var updateTask = PumpVoiceLiveUpdatesAsync(session, socket, cts.Token);
             var browserTask = PumpBrowserMessagesAsync(session, socket, cts.Token);
@@ -75,6 +86,7 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                             t = "ready",
                             config = new
                             {
+                                mode = config.Mode,
                                 activeMode = config.TurnTaking.ActiveMode,
                                 agentName = config.Agent.AgentName,
                                 safeQuestions = config.Agent.SafeQuestions,
