@@ -1,31 +1,45 @@
 # Voice Live CLI
 
-The CLI is the rehearsal harness for the Foundry Voice Live avatar MVP. It validates the shared JSON configuration and, in later phases, will run local operator rehearsals against the live Voice Live session.
+The CLI is the rehearsal harness for the Foundry Voice Live avatar MVP. It validates the shared JSON configuration and can run a live Azure Voice Live model-mode session for headless checks.
 
 ## Requirements
 
 - .NET 10 SDK
-- Windows for audio capture/playback once live audio is implemented, because the planned audio layer uses NAudio.
-
-The current MVP CLI has no Azure SDK dependencies and can validate configuration offline.
+- Azure login available to `DefaultAzureCredential` (for example, `az login`)
+- Windows for live microphone capture/playback, because the audio layer uses NAudio `WaveInEvent`/`WaveOutEvent`.
 
 ## Validate configuration
 
 From the repository root:
 
 ```bash
-cd cli/src/VoiceLive.Cli
-dotnet run -- validate --config ../../../config
+dotnet run --project cli/src/VoiceLive.Cli -- validate --config config
 ```
 
-The command loads `session.json`, `turntaking.json`, and `agent.json`, fails fast with file/field validation errors, and prints the resolved `session.update` payload. In gated/manual mode, `turn_detection` is intentionally omitted from that payload.
+The command loads `session.json`, `turntaking.json`, and `agent.json`, fails fast with file/field validation errors, and prints the resolved legacy `session.update` payload. In gated/manual mode, `turn_detection` is intentionally omitted from that payload.
 
-## Planned commands
+## Run a live Voice Live session
 
-- `run`: start the rehearsal harness and connect to the Voice Live API.
-- `sync-agent`: synchronize Foundry Agent metadata or grounding assets into the local rehearsal flow.
+Model mode is the default and uses the configured endpoint/model with `DefaultAzureCredential`:
 
-Audio capture, playback, and live-session connectivity are Phase 7 work and are not part of this MVP CLI slice.
+```bash
+dotnet run --project cli/src/VoiceLive.Cli -c Release -- run --config config --mode model --text "Say hello in one short sentence." --seconds 30
+```
+
+Headless modes work on Linux/WSL and Windows:
+
+- `--text <prompt>` configures a session, starts a response, prints transcript deltas, and reports final transcript, audio bytes, and first-audio latency.
+- `--audio-file <path>` streams a PCM16 mono 24 kHz WAV file, commits the input audio, starts a response, and prints transcript/latency details.
+
+If neither `--text` nor `--audio-file` is supplied, the CLI attempts live microphone/speaker mode. That mode is Windows-only; on non-Windows platforms the CLI exits with a clear message telling you to use `--text` or `--audio-file`.
+
+Agent mode plumbing is present for later phases:
+
+```bash
+dotnet run --project cli/src/VoiceLive.Cli -c Release -- run --config config --mode agent --text "Hello" --seconds 30
+```
+
+It compiles against the real SDK but is not live-verified until the Foundry agent is created by the later sync flow.
 
 ## Config hot reload
 

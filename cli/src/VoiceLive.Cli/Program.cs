@@ -1,5 +1,6 @@
 using System.Text.Json;
 using VoiceLive.Cli.Config;
+using VoiceLive.Cli.Run;
 using VoiceLive.Cli.Session;
 
 namespace VoiceLive.Cli;
@@ -10,11 +11,14 @@ public static class Program
 
     public static int Run(string[] args, TextWriter outw, TextWriter errw)
     {
-        if (args.Length == 0 || args[0] != "validate")
+        if (args.Length == 0 || (args[0] != "validate" && args[0] != "run"))
         {
-            errw.WriteLine("usage: voicelive-cli validate --config <dir>");
+            errw.WriteLine("usage: voicelive-cli <validate|run> --config <dir>");
             return 2;
         }
+        if (args[0] == "run")
+            return LiveSessionRunner.RunAsync(args[1..], outw, errw).GetAwaiter().GetResult();
+
         var dir = ArgValue(args, "--config") ?? "config";
         try
         {

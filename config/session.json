@@ -1,9 +1,9 @@
 {
-  "endpoint": "wss://REPLACE-ME.services.ai.azure.com",
+  "endpoint": "https://testlab-f.services.ai.azure.com",
   "region": "swedencentral",
-  "apiVersion": "2026-04-10",
+  "apiVersion": "2025-10-01",
   "model": "gpt-realtime",
-  "voice": { "type": "azure-realtime-native", "name": "andrew" },
+  "voice": { "type": "azure-realtime-native", "name": "en-US-AndrewNeural" },
   "inputAudioSamplingRate": 24000,
   "inputAudioNoiseReduction": { "type": "azure_deep_noise_suppression" },
   "inputAudioEchoCancellation": { "type": "server_echo_cancellation" },
