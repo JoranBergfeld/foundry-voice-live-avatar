@@ -227,9 +227,21 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
             case "say":
                 if (doc.RootElement.TryGetProperty("text", out var text))
                 {
-                    var instructions = text.GetString();
-                    if (!string.IsNullOrWhiteSpace(instructions))
-                        await session.StartResponseAsync(instructions, ct);
+                    var prompt = text.GetString();
+                    if (!string.IsNullOrWhiteSpace(prompt))
+                    {
+                        if (config.Mode == "agent")
+                        {
+                            // Agent mode ignores per-response instructions, so inject the
+                            // operator prompt as a user turn to make the hosted agent respond.
+                            await session.AddItemAsync(new UserMessageItem(prompt), ct);
+                            await session.StartResponseAsync(ct);
+                        }
+                        else
+                        {
+                            await session.StartResponseAsync(prompt, ct);
+                        }
+                    }
                 }
                 break;
             case "ping":
