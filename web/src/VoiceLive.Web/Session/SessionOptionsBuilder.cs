@@ -7,10 +7,19 @@ public static class SessionOptionsBuilder
 {
     public static VoiceLiveSessionOptions Build(ServerSessionConfig config, string instructions)
     {
+        var options = BuildCommon(config);
+        options.Model = config.Model;
+        options.Instructions = instructions;
+        return options;
+    }
+
+    public static VoiceLiveSessionOptions BuildForAgent(ServerSessionConfig config)
+        => BuildCommon(config); // agent owns Model + Instructions
+
+    private static VoiceLiveSessionOptions BuildCommon(ServerSessionConfig config)
+    {
         var options = new VoiceLiveSessionOptions
         {
-            Model = config.Model,
-            Instructions = instructions,
             Voice = BuildVoice(config.Voice),
             TurnDetection = BuildTurnDetection(config.TurnTaking),
             InputAudioFormat = InputAudioFormat.Pcm16,

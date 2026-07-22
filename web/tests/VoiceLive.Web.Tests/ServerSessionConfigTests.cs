@@ -55,4 +55,24 @@ public class ServerSessionConfigTests
         var config = WebConfigLoader.LoadServerSession(RepoConfigDir);
         Assert.Equal("model", config.Mode);
     }
+
+    [Fact]
+    public void BuildForAgent_omits_model_and_instructions_but_keeps_voice_avatar_and_audio()
+    {
+        var config = WebConfigLoader.LoadServerSession(RepoConfigDir);
+
+        var options = SessionOptionsBuilder.BuildForAgent(config);
+
+        Assert.Null(options.Model);
+        Assert.Null(options.Instructions);
+        Assert.IsType<AzureStandardVoice>(options.Voice);
+        Assert.Equal(InputAudioFormat.Pcm16, options.InputAudioFormat);
+        Assert.Equal(OutputAudioFormat.Pcm16, options.OutputAudioFormat);
+        Assert.Equal(24000, options.InputAudioSamplingRate);
+        Assert.NotNull(options.Avatar);
+        Assert.Equal("lisa", options.Avatar.Character);
+        Assert.Equal("casual-sitting", options.Avatar.Style);
+        Assert.Contains(options.Modalities, m => m.Equals(InteractionModality.Text));
+        Assert.Contains(options.Modalities, m => m.Equals(InteractionModality.Audio));
+    }
 }
