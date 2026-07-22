@@ -38,6 +38,18 @@ curl -s http://localhost:5280/api/token; echo
 
 If `/api/token` returns a credential error, run `az login` or configure a managed identity.
 
+## How to verify in a browser
+
+Run the app from the repository root:
+
+```bash
+ConfigDir=/home/jbergfeld/vcs/foundry-voice-live-avatar/config ASPNETCORE_URLS=http://127.0.0.1:5210 dotnet run --no-launch-profile --project web/src/VoiceLive.Web
+```
+
+Open `http://127.0.0.1:5210/?view=operator`, grant microphone permission, then hold **Hold to talk** or click a safe-question button. Expect avatar video, spoken answer audio, and live/final transcripts. Open `http://127.0.0.1:5210/?view=display` for a fullscreen avatar-only view.
+
+MVP limitation: every browser tab opens its own `/ws/session`, which creates its own server-side Voice Live session. The operator tab is the complete self-contained experience; a shared operator/display room with one conversation across two screens is future work.
+
 ## Security
 
 The browser never receives the Foundry endpoint from `session.json` or the Voice Live credential. `/ws/session` uses `DefaultAzureCredential` only on the server. `/api/token` remains for compatibility and returns a clear error instead of a fake token when Azure authentication fails.
