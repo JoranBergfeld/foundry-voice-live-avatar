@@ -9,6 +9,7 @@ The `/config` directory contains four JSON files shared by the CLI and web apps.
 | `endpoint` | string | Required | Default: `wss://REPLACE-ME.services.ai.azure.com` | Voice Live websocket endpoint. |
 | `region` | string | Required | Default: `swedencentral` | Azure region for the Voice Live resource. |
 | `apiVersion` | string | Required | Default: `2026-04-10` | Voice Live API version. |
+| `mode` | string | Optional | `model`, `agent`; default: `model` | (Web app) Session establishment mode. `model` connects directly to `model`; `agent` connects to the Foundry agent in `agent.json` via `SessionTarget.FromAgent` (the agent owns model + instructions + tools; voice, avatar, audio, and turn-taking still apply). Env var `VOICELIVE_MODE` overrides this. |
 | `model` | string | Required | Default: `gpt-realtime` | Realtime model deployment name. |
 | `voice` | object | Required | Contains `type`, `name` | Voice selection. |
 | `voice.type` | string | Required | `azure-realtime-native`, `azure-standard`, `azure-custom`, `openai`; default: `azure-realtime-native` | Voice provider/type. |
@@ -86,6 +87,7 @@ The `/config` directory contains four JSON files shared by the CLI and web apps.
 
 - All fields marked required above must be present and non-empty where applicable.
 - `session.json.voice.type` must be one of `azure-realtime-native`, `azure-standard`, `azure-custom`, or `openai`.
+- `session.json.mode` (web app), if present, must be one of `model` or `agent`; the `VOICELIVE_MODE` environment variable (same allowed values) overrides it. Invalid values fail fast at startup.
 - `turntaking.json.activeMode` must be one of `open-mic`, `gated`, or `hybrid`, and the matching entry must exist in `modes`.
 - `agent.json.groundingStrategy` must be one of `pack`, `rag`, or `both`.
 - `agent.json.conversationResumePolicy` must be one of `resume` or `fresh`.

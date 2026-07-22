@@ -38,6 +38,24 @@ curl -s http://localhost:5280/api/token; echo
 
 If `/api/token` returns a credential error, run `az login` or configure a managed identity.
 
+## Agent mode
+
+By default the web app runs in **model mode** (connects to `session.json`'s `model`). To have it
+connect to the Foundry agent named in `config/agent.json` instead — so the agent's server-side
+hosted tools run — set the session mode to `agent`, either in config or via env var:
+
+- In config: set `"mode": "agent"` in `config/session.json`.
+- At runtime (overrides config): set the `VOICELIVE_MODE=agent` environment variable, e.g.
+
+```bash
+ConfigDir=$PWD/config VOICELIVE_MODE=agent ASPNETCORE_URLS=http://127.0.0.1:5210 \
+  dotnet run --no-launch-profile --project web/src/VoiceLive.Web
+```
+
+Tool/function/MCP events emitted by the agent are logged and shown under "Tool activity" in the
+operator view. Note: purely hosted tools (e.g. web search, Azure AI Search) run entirely
+server-side and may not emit a discrete client event.
+
 ## How to verify in a browser
 
 Run the app from the repository root:
