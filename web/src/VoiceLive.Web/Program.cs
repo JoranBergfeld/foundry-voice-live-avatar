@@ -5,6 +5,7 @@ using VoiceLive.Web.Session;
 
 var builder = WebApplication.CreateBuilder(args);
 var configDir = builder.Configuration["ConfigDir"] ?? "config";
+var envSessionMode = builder.Configuration["VOICELIVE_MODE"];
 builder.Services.AddSingleton<ITokenBroker, EntraTokenBroker>();
 var app = builder.Build();
 
@@ -40,7 +41,8 @@ app.Map("/ws/session", async (HttpContext context, ILogger<VoiceLiveWebSocketBri
     using var socket = await context.WebSockets.AcceptWebSocketAsync();
     try
     {
-        var serverConfig = WebConfigLoader.LoadServerSession(configDir);
+        var loaded = WebConfigLoader.LoadServerSession(configDir);
+        var serverConfig = loaded with { Mode = SessionModeResolver.Resolve(loaded.Mode, envSessionMode) };
         await new VoiceLiveWebSocketBridge(serverConfig, logger).RunAsync(socket, context.RequestAborted);
     }
     catch (WebConfigValidationException ex)
