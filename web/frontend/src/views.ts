@@ -1,4 +1,5 @@
 export type ReadyConfig = {
+  mode?: string;
   activeMode: string;
   agentName: string;
   safeQuestions: string[];
@@ -22,6 +23,7 @@ export type OperatorView = {
   setReady(ready: boolean): void;
   setHoldActive(active: boolean): void;
   addTranscript(role: "user" | "agent", text: string, final: boolean): void;
+  noteTool(text: string): void;
 };
 
 export type DisplayView = {
@@ -78,11 +80,13 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
   configPanel.className = "config-panel";
   const agentLine = document.createElement("p");
   agentLine.textContent = "Agent: waiting for server";
+  const sessionModeLine = document.createElement("p");
+  sessionModeLine.textContent = "Session mode: waiting for server";
   const modeLine = document.createElement("p");
   modeLine.textContent = "Turn-taking: waiting for server";
   const avatarLine = document.createElement("p");
   avatarLine.textContent = "Avatar: waiting for server";
-  configPanel.append(agentLine, modeLine, avatarLine);
+  configPanel.append(agentLine, sessionModeLine, modeLine, avatarLine);
 
   const statuses = new Map<StatusName, HTMLParagraphElement>();
   const statusPanel = document.createElement("section");
@@ -113,7 +117,18 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
   const safeQuestionButtons: HTMLButtonElement[] = [];
   const liveText: Record<"user" | "agent", string> = { user: "", agent: "" };
 
-  shell.append(heading, error, avatarPanel, configPanel, statusPanel, controls, transcriptPanel);
+  const toolsPanel = document.createElement("section");
+  toolsPanel.className = "tools-panel";
+  const toolsHeading = document.createElement("h2");
+  toolsHeading.textContent = "Tool activity";
+  const toolsList = document.createElement("div");
+  toolsList.className = "tools-list";
+  const toolsEmpty = document.createElement("p");
+  toolsEmpty.className = "tools-empty";
+  toolsEmpty.textContent = "No tool calls yet.";
+  toolsPanel.append(toolsHeading, toolsList, toolsEmpty);
+
+  shell.append(heading, error, avatarPanel, configPanel, statusPanel, controls, transcriptPanel, toolsPanel);
   root.append(shell);
 
   function addTranscript(role: "user" | "agent", text: string, final: boolean) {
@@ -138,6 +153,7 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
     safeQuestionButtons,
     setConfig(config) {
       setText(agentLine, `Agent: ${config.agentName}`);
+      setText(sessionModeLine, `Session mode: ${config.mode ?? "model"}`);
       setText(modeLine, `Turn-taking: ${config.activeMode}`);
       setText(avatarLine, `Avatar: ${config.avatarCharacter ?? "configured"}${config.avatarStyle ? ` (${config.avatarStyle})` : ""}`);
       safeQuestionPanel.replaceChildren();
@@ -171,6 +187,16 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
       holdButton.textContent = active ? "Release to end turn" : "Hold to talk";
     },
     addTranscript,
+    noteTool(text) {
+      toolsEmpty.hidden = true;
+      const line = document.createElement("p");
+      line.className = "tool-line";
+      const stamp = new Date().toLocaleTimeString();
+      line.textContent = `${stamp} — ${text}`;
+      toolsList.append(line);
+      while (toolsList.childElementCount > 8) toolsList.firstElementChild?.remove();
+      line.scrollIntoView({ block: "nearest" });
+    },
   };
 }
 

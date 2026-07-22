@@ -5,11 +5,13 @@ type ReadyFrame = { t: "ready"; config: ReadyConfig; iceServers: IceServerFrame[
 type AvatarAnswerFrame = { t: "avatar-answer"; sdp: string };
 type TranscriptFrame = { t: "user-transcript" | "agent-transcript"; text: string; final: boolean };
 type ErrorFrame = { t: "error"; message: string };
+type ToolFrame = { t: "tool"; phase: string; name?: string | null; callId?: string | null };
 type ServerFrame =
   | ReadyFrame
   | AvatarAnswerFrame
   | TranscriptFrame
   | ErrorFrame
+  | ToolFrame
   | { t: "speech-started" | "speech-stopped" | "avatar-speaking" | "avatar-idle" | "response-done" };
 
 type ControlFrame =
@@ -116,6 +118,12 @@ class ThinVoiceLiveClient {
       case "response-done":
         this.setStatus("turn", "response done");
         break;
+      case "tool": {
+        const label = frame.name ? `${frame.phase}: ${frame.name}` : frame.phase;
+        const idSuffix = frame.callId ? ` (${frame.callId})` : "";
+        this.operator?.noteTool(`tool ${label}${idSuffix}`);
+        break;
+      }
       case "error":
         this.fail(`Server error: ${frame.message}`);
         break;
