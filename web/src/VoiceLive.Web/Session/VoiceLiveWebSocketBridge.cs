@@ -104,7 +104,13 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                     await SendJsonAsync(socket, new { t = "avatar-idle" }, ct);
                     break;
                 case SessionUpdateAvatarConnecting avatar:
-                    await SendJsonAsync(socket, new { t = "avatar-answer", sdp = avatar.ServerSdp }, ct);
+                    var rawAnswer = DecodeAvatarAnswer(avatar.ServerSdp);
+                    if (rawAnswer is null)
+                    {
+                        await SendErrorAndCloseAsync(socket, "Avatar answer from the service could not be decoded.", ct);
+                        return;
+                    }
+                    await SendJsonAsync(socket, new { t = "avatar-answer", sdp = rawAnswer }, ct);
                     break;
                 case SessionUpdateResponseAudioTranscriptDelta transcript:
                     await SendJsonAsync(socket, new { t = "agent-transcript", text = transcript.Delta, final = false }, ct);
@@ -172,7 +178,7 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
         {
             case "avatar-offer":
                 if (doc.RootElement.TryGetProperty("sdp", out var sdp))
-                    await session.ConnectAvatarAsync(sdp.GetString() ?? string.Empty, ct);
+                    await session.ConnectAvatarAsync(EncodeAvatarOffer(sdp.GetString() ?? string.Empty), ct);
                 break;
             case "start-turn":
                 _currentTurnId = CreateTurnId();
@@ -248,6 +254,27 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
     private static IReadOnlyList<object> BuildIceServers(IList<IceServer>? iceServers) => iceServers is null
         ? []
         : iceServers.Select(s => new { urls = s.Uris.ToArray(), username = s.Username, credential = s.Credential }).Cast<object>().ToArray();
+
+    private static string EncodeAvatarOffer(string rawOffer)
+    {
+        var wrapped = JsonSerializer.Serialize(new { type = "offer", sdp = rawOffer });
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(wrapped));
+    }
+
+    private static string? DecodeAvatarAnswer(string? serverSdp)
+    {
+        if (string.IsNullOrEmpty(serverSdp)) return null;
+        try
+        {
+            var json = Encoding.UTF8.GetString(Convert.FromBase64String(serverSdp));
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.TryGetProperty("sdp", out var s) ? s.GetString() : null;
+        }
+        catch (Exception ex) when (ex is FormatException or JsonException)
+        {
+            return null;
+        }
+    }
 
     private static string CreateTurnId() => "turn-" + Guid.NewGuid().ToString("N");
 
