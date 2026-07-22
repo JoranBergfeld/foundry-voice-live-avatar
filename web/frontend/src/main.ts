@@ -179,8 +179,12 @@ class ThinVoiceLiveClient {
       this.pc.ontrack = (event) => {
         const [stream] = event.streams;
         if (!stream) return;
+        // Bundled avatar video+audio arrive as separate track events on the same stream; attach once.
+        if (this.view.avatar.srcObject === stream) return;
         this.view.avatar.srcObject = stream;
         this.view.avatar.play().catch((error: unknown) => {
+          // AbortError means a newer load interrupted play(); media can still be flowing.
+          if (error instanceof DOMException && error.name === "AbortError") return;
           this.fail(`Browser blocked avatar playback: ${error instanceof Error ? error.message : String(error)}. Interact with the page and retry if needed.`);
         });
       };

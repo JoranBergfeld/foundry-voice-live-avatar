@@ -323,8 +323,10 @@ var require_main = __commonJS({
           this.pc.ontrack = (event) => {
             const [stream] = event.streams;
             if (!stream) return;
+            if (this.view.avatar.srcObject === stream) return;
             this.view.avatar.srcObject = stream;
             this.view.avatar.play().catch((error) => {
+              if (error instanceof DOMException && error.name === "AbortError") return;
               this.fail(`Browser blocked avatar playback: ${error instanceof Error ? error.message : String(error)}. Interact with the page and retry if needed.`);
             });
           };
