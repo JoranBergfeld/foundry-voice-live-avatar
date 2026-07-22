@@ -36,6 +36,28 @@ public class SessionOptionsBuilderTests
         Assert.Equal("test instructions", options.Instructions);
     }
 
+    [Fact]
+    public void Agent_options_omit_model_and_instructions_but_keep_common_audio_voice_and_turn_options()
+    {
+        var mode = new TurnMode(TurnDetection: new TurnDetectionConfig(
+            "azure_semantic_vad",
+            Threshold: 0.55,
+            PrefixPaddingMs: 420,
+            SilenceDurationMs: 600));
+
+        var options = SessionOptionsBuilder.BuildForAgent(Cfg(activeMode: "open-mic", mode: mode));
+
+        Assert.Null(options.Model);
+        Assert.Null(options.Instructions);
+        Assert.IsType<AzureStandardVoice>(options.Voice);
+        Assert.IsType<AzureSemanticVadTurnDetection>(options.TurnDetection);
+        Assert.Contains(InteractionModality.Text, options.Modalities);
+        Assert.Contains(InteractionModality.Audio, options.Modalities);
+        Assert.Equal(InputAudioFormat.Pcm16, options.InputAudioFormat);
+        Assert.Equal(OutputAudioFormat.Pcm16, options.OutputAudioFormat);
+        Assert.Equal(24000, options.InputAudioSamplingRate);
+    }
+
     [Theory]
     [InlineData("azure-standard")]
     [InlineData("azure-realtime-native")]

@@ -7,11 +7,19 @@ public static class SessionOptionsBuilder
 {
     public static VoiceLiveSessionOptions Build(AppConfig config, string instructions)
     {
+        var options = BuildCommon(config);
+        options.Model = config.Session.Model;
+        options.Instructions = instructions;
+        return options;
+    }
+
+    public static VoiceLiveSessionOptions BuildForAgent(AppConfig config) => BuildCommon(config);
+
+    private static VoiceLiveSessionOptions BuildCommon(AppConfig config)
+    {
         var session = config.Session;
         var options = new VoiceLiveSessionOptions
         {
-            Model = session.Model,
-            Instructions = instructions,
             Voice = BuildVoice(session.Voice),
             TurnDetection = BuildTurnDetection(config.TurnTaking),
             InputAudioFormat = InputAudioFormat.Pcm16,

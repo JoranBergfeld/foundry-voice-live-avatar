@@ -32,12 +32,11 @@ public static class LiveSessionRunner
         try
         {
             var config = ConfigLoader.Load(options.ConfigDir);
-            var instructions = ResolveInstructions(options.ConfigDir, options.Instructions);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(options.Seconds));
             var client = CreateClient(config, errw);
 
             if (options.Mode.Equals("agent", StringComparison.OrdinalIgnoreCase))
-                return await RunAgentAsync(client, config, instructions, options, outw, errw, cts.Token);
+                return await RunAgentAsync(client, config, options, outw, errw, cts.Token);
 
             if (!options.Mode.Equals("model", StringComparison.OrdinalIgnoreCase))
             {
@@ -45,6 +44,7 @@ public static class LiveSessionRunner
                 return 2;
             }
 
+            var instructions = ResolveInstructions(options.ConfigDir, options.Instructions);
             await using var liveSession = await client.StartSessionAsync(config.Session.Model, cts.Token);
             var sessionOptions = SessionOptionsBuilder.Build(config, instructions);
             await liveSession.ConfigureSessionAsync(sessionOptions, cts.Token);
@@ -87,7 +87,7 @@ public static class LiveSessionRunner
         return new VoiceLiveClient(new Uri(config.Session.Endpoint), new DefaultAzureCredential(), clientOptions);
     }
 
-    private static async Task<int> RunAgentAsync(VoiceLiveClient client, AppConfig config, string instructions, RunOptions options, TextWriter outw, TextWriter errw, CancellationToken ct)
+    private static async Task<int> RunAgentAsync(VoiceLiveClient client, AppConfig config, RunOptions options, TextWriter outw, TextWriter errw, CancellationToken ct)
     {
         var agent = new AgentSessionConfig(config.Agent.AgentName, config.Agent.AgentProjectName);
         if (!string.IsNullOrWhiteSpace(config.Agent.AgentVersion)) agent.AgentVersion = config.Agent.AgentVersion;
@@ -95,7 +95,7 @@ public static class LiveSessionRunner
         try
         {
             await using var liveSession = await client.StartSessionAsync(SessionTarget.FromAgent(agent), ct);
-            await liveSession.ConfigureSessionAsync(SessionOptionsBuilder.Build(config, instructions), ct);
+            await liveSession.ConfigureSessionAsync(SessionOptionsBuilder.BuildForAgent(config), ct);
             if (options.Text is not null) return await RunTextAsync(liveSession, options.Text, outw, errw, ct);
             errw.WriteLine("Agent mode connected, but this project does not yet have a live-verified Foundry agent. Use --text or create/sync the agent in a later phase.");
             return 1;
@@ -124,8 +124,9 @@ public static class LiveSessionRunner
                     if (!requested)
                     {
                         requested = true;
+                        await liveSession.AddItemAsync(new UserMessageItem(prompt), ct);
                         responseClock.Restart();
-                        await liveSession.StartResponseAsync(prompt, ct);
+                        await liveSession.StartResponseAsync(ct);
                     }
                     break;
                 case SessionUpdateResponseAudioTranscriptDelta delta:
@@ -141,6 +142,11 @@ public static class LiveSessionRunner
                     audioBytes += delta.Delta?.ToArray().Length ?? 0;
                     break;
                 case SessionUpdateResponseDone:
+                    if (transcript.Length == 0 && audioBytes == 0)
+                    {
+                        errw.WriteLine("Voice Live response completed without transcript or audio.");
+                        return 1;
+                    }
                     outw.WriteLine();
                     outw.WriteLine($"Final transcript: {transcript.ToString().Trim()}");
                     outw.WriteLine($"Audio bytes: {audioBytes}");
