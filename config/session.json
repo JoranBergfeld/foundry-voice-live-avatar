@@ -1,0 +1,11 @@
+{
+  "endpoint": "wss://REPLACE-ME.services.ai.azure.com",
+  "region": "swedencentral",
+  "apiVersion": "2026-04-10",
+  "model": "gpt-realtime",
+  "voice": { "type": "azure-realtime-native", "name": "andrew" },
+  "inputAudioSamplingRate": 24000,
+  "inputAudioNoiseReduction": { "type": "azure_deep_noise_suppression" },
+  "inputAudioEchoCancellation": { "type": "server_echo_cancellation" },
+  "inputAudioTranscription": { "model": "azure-speech", "language": "en" }
+}

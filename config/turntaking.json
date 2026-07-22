@@ -1,0 +1,28 @@
+{
+  "activeMode": "gated",
+  "modes": {
+    "open-mic": {
+      "manualTurn": false,
+      "turnDetection": {
+        "type": "azure_semantic_vad",
+        "threshold": 0.5,
+        "prefixPaddingMs": 420,
+        "silenceDurationMs": 500,
+        "interruptResponse": true,
+        "endOfUtteranceDetection": { "model": "semantic_detection_v1", "thresholdLevel": "medium", "timeoutMs": 1000 }
+      }
+    },
+    "gated": { "manualTurn": true, "interruptResponse": false },
+    "hybrid": {
+      "manualTurn": false,
+      "gateGatesBargeIn": true,
+      "turnDetection": {
+        "type": "azure_semantic_vad",
+        "threshold": 0.5,
+        "silenceDurationMs": 500,
+        "interruptResponse": true,
+        "endOfUtteranceDetection": { "model": "semantic_detection_v1", "thresholdLevel": "medium", "timeoutMs": 1000 }
+      }
+    }
+  }
+}
