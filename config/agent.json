@@ -1,6 +1,6 @@
 {
   "agentName": "company-direction-avatar",
-  "agentProjectName": "voice-live-avatar",
+  "agentProjectName": "proj-default",
   "agentVersion": null,
   "conversationResumePolicy": "resume",
   "groundingStrategy": "pack",

@@ -61,7 +61,7 @@ The `/config` directory contains four JSON files shared by the CLI and web apps.
 | Field | Type | Required | Allowed values / default | Description |
 | --- | --- | --- | --- | --- |
 | `agentName` | string | Required | Default: `company-direction-avatar` | Foundry agent name. |
-| `agentProjectName` | string | Required | Default: `voice-live-avatar` | Foundry agent project name. |
+| `agentProjectName` | string | Required | Default: `proj-default` | Foundry agent project name (the short project name in the Foundry endpoint path, e.g. `proj-default`). |
 | `agentVersion` | string or null | Optional | Default: `null` | Optional pinned agent version. |
 | `conversationResumePolicy` | string | Required | `resume`, `fresh`; default: `resume` | Whether conversations resume or start fresh. |
 | `groundingStrategy` | string | Required | `pack`, `rag`, `both`; default: `pack` | Grounding source strategy. |
