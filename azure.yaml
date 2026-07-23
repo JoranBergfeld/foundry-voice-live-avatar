@@ -18,11 +18,11 @@ hooks:
   postprovision:
     posix:
       shell: sh
-      run: ./scripts/create-agent.sh
+      run: ./scripts/setup-agent.sh
       interactive: false
       continueOnError: true
     windows:
       shell: pwsh
-      run: ./scripts/create-agent.ps1
+      run: ./scripts/setup-agent.ps1
       interactive: false
       continueOnError: true
