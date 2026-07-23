@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics.Metrics;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -16,6 +17,10 @@ public sealed class VoiceLiveWebSocketBridge(
     ILogger<VoiceLiveWebSocketBridge> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly Meter Meter = new("VoiceLive.Web");
+    private static readonly UpDownCounter<long> ActiveSessions = Meter.CreateUpDownCounter<long>("voicelive.active_sessions");
+    private static readonly Histogram<double> SessionDurationMs = Meter.CreateHistogram<double>("voicelive.session_duration_ms");
+    private static readonly Counter<long> Errors = Meter.CreateCounter<long>("voicelive.errors");
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private IReadOnlyList<object> _iceServers = [];
     private string? _currentTurnId;
@@ -24,55 +29,67 @@ public sealed class VoiceLiveWebSocketBridge(
 
     public async Task RunAsync(WebSocket socket, CancellationToken requestAborted)
     {
-        VoiceLiveSession? session = null;
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
-
+        var sessionId = Guid.NewGuid().ToString("N")[..8];
+        using var scope = logger.BeginScope("session:{SessionId}", sessionId);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        ActiveSessions.Add(1);
         try
         {
-            var serviceVersion = VoiceLiveServiceVersionMapper.Map(config.ApiVersion);
-            var client = new VoiceLiveClient(
-                new Uri(config.Endpoint),
-                credential,
-                new VoiceLiveClientOptions(serviceVersion));
+            VoiceLiveSession? session = null;
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
 
-            if (config.Mode == "agent")
+            try
             {
-                logger.LogInformation("Starting Voice Live session in AGENT mode ({Agent} / {Project})", config.Agent.AgentName, config.Agent.AgentProjectName);
-                var agent = new AgentSessionConfig(config.Agent.AgentName, config.Agent.AgentProjectName);
-                session = await client.StartSessionAsync(SessionTarget.FromAgent(agent), cts.Token);
-                await session.ConfigureSessionAsync(SessionOptionsBuilder.BuildForAgent(config), cts.Token);
+                var serviceVersion = VoiceLiveServiceVersionMapper.Map(config.ApiVersion);
+                var client = new VoiceLiveClient(
+                    new Uri(config.Endpoint),
+                    credential,
+                    new VoiceLiveClientOptions(serviceVersion));
+
+                if (config.Mode == "agent")
+                {
+                    logger.LogInformation("Starting Voice Live session in AGENT mode ({Agent} / {Project})", config.Agent.AgentName, config.Agent.AgentProjectName);
+                    var agent = new AgentSessionConfig(config.Agent.AgentName, config.Agent.AgentProjectName);
+                    session = await client.StartSessionAsync(SessionTarget.FromAgent(agent), cts.Token);
+                    await session.ConfigureSessionAsync(SessionOptionsBuilder.BuildForAgent(config), cts.Token);
+                }
+                else
+                {
+                    logger.LogInformation("Starting Voice Live session in MODEL mode ({Model})", config.Model);
+                    session = await client.StartSessionAsync(config.Model, cts.Token);
+                    var sessionOptions = SessionOptionsBuilder.Build(config, modelInstructions);
+                    await session.ConfigureSessionAsync(sessionOptions, cts.Token);
+                }
+
+                var updateTask = PumpVoiceLiveUpdatesAsync(session, socket, cts.Token);
+                var browserTask = PumpBrowserMessagesAsync(session, socket, cts.Token);
+
+                await Task.WhenAny(updateTask, browserTask);
+                cts.Cancel();
+                await Task.WhenAll(SwallowCancellation(updateTask), SwallowCancellation(browserTask));
             }
-            else
+            catch (OperationCanceledException) when (requestAborted.IsCancellationRequested || socket.State is WebSocketState.Closed or WebSocketState.Aborted)
             {
-                logger.LogInformation("Starting Voice Live session in MODEL mode ({Model})", config.Model);
-                session = await client.StartSessionAsync(config.Model, cts.Token);
-                var sessionOptions = SessionOptionsBuilder.Build(config, modelInstructions);
-                await session.ConfigureSessionAsync(sessionOptions, cts.Token);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Voice Live WebSocket bridge failed");
+                await SendErrorAndCloseAsync(socket, SafeError(ex), CancellationToken.None);
+                return;
+            }
+            finally
+            {
+                if (session is not null)
+                    await session.DisposeAsync();
             }
 
-            var updateTask = PumpVoiceLiveUpdatesAsync(session, socket, cts.Token);
-            var browserTask = PumpBrowserMessagesAsync(session, socket, cts.Token);
-
-            await Task.WhenAny(updateTask, browserTask);
-            cts.Cancel();
-            await Task.WhenAll(SwallowCancellation(updateTask), SwallowCancellation(browserTask));
-        }
-        catch (OperationCanceledException) when (requestAborted.IsCancellationRequested || socket.State is WebSocketState.Closed or WebSocketState.Aborted)
-        {
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Voice Live WebSocket bridge failed");
-            await SendErrorAndCloseAsync(socket, SafeError(ex), CancellationToken.None);
-            return;
+            await CloseIfOpenAsync(socket, WebSocketCloseStatus.NormalClosure, "session closed", CancellationToken.None);
         }
         finally
         {
-            if (session is not null)
-                await session.DisposeAsync();
+            ActiveSessions.Add(-1);
+            SessionDurationMs.Record(sw.Elapsed.TotalMilliseconds);
         }
-
-        await CloseIfOpenAsync(socket, WebSocketCloseStatus.NormalClosure, "session closed", CancellationToken.None);
     }
 
     private async Task PumpVoiceLiveUpdatesAsync(VoiceLiveSession session, WebSocket socket, CancellationToken ct)
@@ -163,6 +180,7 @@ public sealed class VoiceLiveWebSocketBridge(
                     var message = error.Error is null
                         ? "Voice Live service reported an error."
                         : $"Voice Live service error ({error.Error.Code ?? error.Error.Type}): {error.Error.Message}";
+                    Errors.Add(1, new KeyValuePair<string, object?>("code", error.Error?.Code ?? error.Error?.Type ?? "unknown"));
                     await SendErrorAndCloseAsync(socket, message, ct);
                     return;
             }

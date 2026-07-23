@@ -1,5 +1,7 @@
 using System.Net.WebSockets;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Metrics;
 using VoiceLive.Web.Auth;
 using VoiceLive.Web.Config;
 using VoiceLive.Web.Session;
@@ -25,11 +27,13 @@ builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.Cookies.C
         o.SlidingExpiration = true;
     });
 builder.Services.AddAuthorization();
-builder.Services.AddSingleton(sp =>
+builder.Services.AddSingleton<VoiceLive.Web.Config.ConfigState>(sp =>
 {
     var o = sp.GetRequiredService<IOptions<VoiceLive.Web.Config.VoiceLiveOptions>>().Value;
-    return VoiceLive.Web.Config.AppConfigLoader.Load(o.ConfigDir, o);
+    try { return new VoiceLive.Web.Config.ConfigState(VoiceLive.Web.Config.AppConfigLoader.Load(o.ConfigDir, o), null); }
+    catch (VoiceLive.Web.Config.WebConfigValidationException ex) { return new VoiceLive.Web.Config.ConfigState(null, ex.Message); }
 });
+builder.Services.AddHealthChecks().AddCheck<VoiceLive.Web.Health.ConfigHealthCheck>("config");
 builder.Services.AddSingleton(sp =>
     new VoiceLive.Web.Session.SessionGate(
         sp.GetRequiredService<IOptions<VoiceLive.Web.Config.VoiceLiveOptions>>().Value.MaxConcurrentSessions));
@@ -41,10 +45,14 @@ builder.Services.AddSingleton<Azure.Core.TokenCredential>(_ =>
     return new Azure.Identity.DefaultAzureCredential(options);
 });
 builder.Services.AddSingleton<VoiceLive.Web.Session.IVoiceLiveBridgeFactory, VoiceLive.Web.Session.VoiceLiveBridgeFactory>();
+var otel = builder.Services.AddOpenTelemetry().WithMetrics(m => m.AddMeter("VoiceLive.Web"));
+if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
+    otel.UseAzureMonitor();
 var app = builder.Build();
 
-try { _ = app.Services.GetRequiredService<VoiceLive.Web.Config.AppConfig>(); }
-catch (VoiceLive.Web.Config.WebConfigValidationException ex) { app.Logger.LogCritical("{Error}", ex.Message); throw; }
+var configState = app.Services.GetRequiredService<VoiceLive.Web.Config.ConfigState>();
+if (configState.Error is not null)
+    app.Logger.LogCritical("Configuration is invalid; the app will report unhealthy until fixed: {Error}", configState.Error);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -90,15 +98,18 @@ app.UseStaticFiles();
 
 app.UseAuthorization();
 
-app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
+app.MapHealthChecks("/api/health").AllowAnonymous();
 
-app.MapGet("/api/config", (VoiceLive.Web.Config.AppConfig cfg) => Results.Ok(cfg.Client));
+app.MapGet("/api/config", (VoiceLive.Web.Config.ConfigState state) =>
+    state.Config is not null
+        ? Results.Ok(state.Config.Client)
+        : Results.Json(new { error = state.Error }, statusCode: StatusCodes.Status503ServiceUnavailable));
 
 app.Map("/ws/session", async (
     HttpContext context,
     SessionGate gate,
     IVoiceLiveBridgeFactory factory,
-    VoiceLive.Web.Config.AppConfig appConfig,
+    VoiceLive.Web.Config.ConfigState configState,
     IOptions<VoiceLive.Web.Config.VoiceLiveOptions> opt) =>
 {
     if (!context.WebSockets.IsWebSocketRequest)
@@ -113,6 +124,11 @@ app.Map("/ws/session", async (
         return;
     }
     using var socket = await context.WebSockets.AcceptWebSocketAsync();
+    if (configState.Config is null)
+    {
+        await SendStartupErrorAsync(socket, configState.Error ?? "Server configuration is invalid.", context.RequestAborted);
+        return;
+    }
     if (!gate.TryEnter())
     {
         await SendStartupErrorAsync(socket, "The server is at capacity. Try again shortly.", context.RequestAborted);
@@ -120,7 +136,7 @@ app.Map("/ws/session", async (
     }
     try
     {
-        await factory.Create(appConfig).RunAsync(socket, context.RequestAborted);
+        await factory.Create(configState.Config).RunAsync(socket, context.RequestAborted);
     }
     finally
     {
