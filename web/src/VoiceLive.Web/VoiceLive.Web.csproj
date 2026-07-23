@@ -11,4 +11,12 @@
     <PackageReference Include="Azure.AI.VoiceLive" Version="1.1.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\..\config\**\*"
+             Link="config\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Exclude="..\..\..\config\session.sample.json" />
+  </ItemGroup>
+
 </Project>
