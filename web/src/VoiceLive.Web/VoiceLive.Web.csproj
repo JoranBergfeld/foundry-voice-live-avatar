@@ -6,6 +6,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <FrontendDir>$(MSBuildProjectDirectory)\..\..\..\web\frontend</FrontendDir>
+    <SkipFrontendBuild Condition="'$(SkipFrontendBuild)' == ''">false</SkipFrontendBuild>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.21.0" />
     <PackageReference Include="Azure.AI.VoiceLive" Version="1.1.0" />
@@ -18,5 +23,13 @@
              CopyToPublishDirectory="PreserveNewest"
              Exclude="..\..\..\config\session.sample.json" />
   </ItemGroup>
+
+  <Target Name="BuildFrontend" BeforeTargets="Build;Publish"
+          Condition="'$(SkipFrontendBuild)' != 'true'"
+          Inputs="$(FrontendDir)\src\main.ts;$(FrontendDir)\src\views.ts;$(FrontendDir)\package.json;$(FrontendDir)\package-lock.json"
+          Outputs="$(MSBuildProjectDirectory)\wwwroot\app.js">
+    <Exec Command="npm ci" WorkingDirectory="$(FrontendDir)" />
+    <Exec Command="npm run build" WorkingDirectory="$(FrontendDir)" />
+  </Target>
 
 </Project>
