@@ -22,6 +22,23 @@ var envSessionMode = builder.Configuration["VOICELIVE_MODE"];
 builder.Services.AddSingleton(new VoiceLive.Web.Session.SessionGate(2));
 var app = builder.Build();
 
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
+app.Use(async (ctx, next) =>
+{
+    var h = ctx.Response.Headers;
+    h["X-Content-Type-Options"] = "nosniff";
+    h["X-Frame-Options"] = "DENY";
+    h["Referrer-Policy"] = "no-referrer";
+    h["Content-Security-Policy"] =
+        "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; " +
+        "connect-src 'self' wss: https:; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:";
+    await next();
+});
+
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 
 app.UseAuthentication();
