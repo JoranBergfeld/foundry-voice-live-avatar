@@ -5,12 +5,12 @@ namespace VoiceLive.Web.Session;
 
 public interface IVoiceLiveBridgeFactory
 {
-    VoiceLiveWebSocketBridge Create(ServerSessionConfig config);
+    VoiceLiveWebSocketBridge Create(AppConfig appConfig);
 }
 
 public sealed class VoiceLiveBridgeFactory(TokenCredential credential, ILoggerFactory loggerFactory)
     : IVoiceLiveBridgeFactory
 {
-    public VoiceLiveWebSocketBridge Create(ServerSessionConfig config)
-        => new(config, credential, loggerFactory.CreateLogger<VoiceLiveWebSocketBridge>());
+    public VoiceLiveWebSocketBridge Create(AppConfig appConfig)
+        => new(appConfig.Server, credential, appConfig.ModelInstructions, loggerFactory.CreateLogger<VoiceLiveWebSocketBridge>());
 }

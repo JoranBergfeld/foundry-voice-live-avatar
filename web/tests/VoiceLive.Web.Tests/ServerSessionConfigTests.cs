@@ -5,14 +5,15 @@ using Xunit;
 
 public class ServerSessionConfigTests
 {
-    private static string RepoConfigDir => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", "config"));
+    private static string RepoConfigDir => TestAppFactory.RepoConfigDir;
+    private static VoiceLiveOptions ModelOpts() => new() { Endpoint = "https://x", Mode = "model", ApiVersion = "2025-10-01" };
 
     [Fact]
     public void LoadServerSession_returns_endpoint_and_active_turn_mode()
     {
-        var config = WebConfigLoader.LoadServerSession(RepoConfigDir);
+        var config = AppConfigLoader.Load(RepoConfigDir, ModelOpts()).Server;
 
-        Assert.Equal("https://testlab-f.services.ai.azure.com", config.Endpoint);
+        Assert.Equal("https://x", config.Endpoint);
         Assert.Equal("2025-10-01", config.ApiVersion);
         Assert.Equal("gpt-realtime", config.Model);
         Assert.Equal("gated", config.TurnTaking.ActiveMode);
@@ -25,7 +26,7 @@ public class ServerSessionConfigTests
     [Fact]
     public void Build_maps_gated_avatar_session_to_verified_sdk_options()
     {
-        var config = WebConfigLoader.LoadServerSession(RepoConfigDir);
+        var config = AppConfigLoader.Load(RepoConfigDir, ModelOpts()).Server;
 
         var options = SessionOptionsBuilder.Build(config, "Keep answers short.");
 
@@ -52,14 +53,37 @@ public class ServerSessionConfigTests
     [Fact]
     public void LoadServerSession_defaults_mode_to_model()
     {
-        var config = WebConfigLoader.LoadServerSession(RepoConfigDir);
+        var config = AppConfigLoader.Load(RepoConfigDir, ModelOpts()).Server;
         Assert.Equal("model", config.Mode);
+    }
+
+    [Fact]
+    public void AppConfigLoader_missing_endpoint_throws()
+    {
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(RepoConfigDir, new VoiceLiveOptions { Endpoint = "", Mode = "model" }));
+        Assert.Contains("VoiceLive:Endpoint", ex.Message);
+    }
+
+    [Fact]
+    public void AppConfigLoader_unknown_api_version_throws()
+    {
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(RepoConfigDir, new VoiceLiveOptions { Endpoint = "https://x", ApiVersion = "1999-01-01", Mode = "model" }));
+        Assert.Contains("apiVersion '1999-01-01' is not supported", ex.Message);
+    }
+
+    [Fact]
+    public void AppConfigLoader_agent_mode_allows_missing_model_and_grounding()
+    {
+        var config = AppConfigLoader.Load(RepoConfigDir, new VoiceLiveOptions { Endpoint = "https://x", Mode = "agent" });
+        Assert.Equal("agent", config.Server.Mode);
     }
 
     [Fact]
     public void BuildForAgent_omits_model_and_instructions_but_keeps_voice_avatar_and_audio()
     {
-        var config = WebConfigLoader.LoadServerSession(RepoConfigDir);
+        var config = AppConfigLoader.Load(RepoConfigDir, ModelOpts()).Server;
 
         var options = SessionOptionsBuilder.BuildForAgent(config);
 

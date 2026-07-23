@@ -12,6 +12,7 @@ namespace VoiceLive.Web.Session;
 public sealed class VoiceLiveWebSocketBridge(
     ServerSessionConfig config,
     TokenCredential credential,
+    string modelInstructions,
     ILogger<VoiceLiveWebSocketBridge> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -28,7 +29,7 @@ public sealed class VoiceLiveWebSocketBridge(
 
         try
         {
-            var serviceVersion = VoiceLiveServiceVersionMapper.Map(config.ApiVersion, message => logger.LogWarning("{Message}", message));
+            var serviceVersion = VoiceLiveServiceVersionMapper.Map(config.ApiVersion);
             var client = new VoiceLiveClient(
                 new Uri(config.Endpoint),
                 credential,
@@ -45,7 +46,7 @@ public sealed class VoiceLiveWebSocketBridge(
             {
                 logger.LogInformation("Starting Voice Live session in MODEL mode ({Model})", config.Model);
                 session = await client.StartSessionAsync(config.Model, cts.Token);
-                var sessionOptions = SessionOptionsBuilder.Build(config, "You are a helpful assistant. Reply in concise, spoken sentences.");
+                var sessionOptions = SessionOptionsBuilder.Build(config, modelInstructions);
                 await session.ConfigureSessionAsync(sessionOptions, cts.Token);
             }
 

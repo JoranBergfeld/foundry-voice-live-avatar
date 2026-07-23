@@ -2,10 +2,10 @@ using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
-public class AuthTests : IClassFixture<WebApplicationFactory<Program>>
+public class AuthTests : IClassFixture<TestAppFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
-    public AuthTests(WebApplicationFactory<Program> factory) => _factory = factory;
+    private readonly TestAppFactory _factory;
+    public AuthTests(TestAppFactory factory) => _factory = factory;
 
     [Fact]
     public async Task Root_without_cookie_redirects_to_login()

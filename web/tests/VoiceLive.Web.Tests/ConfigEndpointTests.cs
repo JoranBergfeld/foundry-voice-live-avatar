@@ -1,15 +1,10 @@
 using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
-public class ConfigEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public class ConfigEndpointTests : IClassFixture<TestAppFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
-    public ConfigEndpointTests(WebApplicationFactory<Program> f)
-    {
-        var repoConfig = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..","..","..","..","..","..","config"));
-        _factory = f.WithWebHostBuilder(b => b.UseSetting("ConfigDir", repoConfig));
-    }
+    private readonly TestAppFactory _factory;
+    public ConfigEndpointTests(TestAppFactory factory) => _factory = factory;
 
     [Fact]
     public async Task Health_returns_ok()
