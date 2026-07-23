@@ -3,31 +3,28 @@
 ## Day before
 
 - [ ] Confirm the Azure AI Foundry resource is in `swedencentral`.
-- [ ] Confirm operator RBAC: `Cognitive Services User` + `Foundry User` on the account scope.
-- [ ] Run `az login` on the operator machine and select the target subscription.
-- [ ] Review `/config` against [`docs/config-schema.md`](config-schema.md).
+- [ ] Confirm app/managed-identity RBAC: `Cognitive Services User` + `Foundry User` / `Azure AI User` on the account/project scope.
+- [ ] Run `az login` on the operator machine for local runs, or confirm `azd up` has deployed the App Service managed identity.
+- [ ] Review `/config` and app settings against [`docs/config-schema.md`](config-schema.md).
 - [ ] Finalize `config/grounding/company-direction.md`.
 - [ ] Confirm safe questions in `config/agent.json`.
-- [ ] Validate config:
+- [ ] Run the web app locally or confirm the deployed URL is available:
   ```bash
-  dotnet run --project cli/src/VoiceLive.Cli -- validate --config config
+  dotnet run --project web/src/VoiceLive.Web
   ```
-- [ ] Run the model-mode smoke test:
-  ```bash
-  dotnet run --project cli/src/VoiceLive.Cli -c Release -- run --config config --mode model --text "Say hello in one short sentence." --seconds 30
-  ```
+- [ ] Open `/?view=operator`, sign in, grant microphone permission, and ask a safe question with hold-to-talk.
 
 ## Event-day setup
 
-- [ ] Confirm `az login` is still valid on the operator machine.
-- [ ] Start the web app:
+- [ ] Confirm local `az login` is still valid, or confirm the deployed App Service is healthy.
+- [ ] Start the local web app or open the deployed URL:
   ```bash
-  ConfigDir=/home/jbergfeld/vcs/foundry-voice-live-avatar/config ASPNETCORE_URLS=http://127.0.0.1:5210 dotnet run --no-launch-profile --project web/src/VoiceLive.Web
+  dotnet run --project web/src/VoiceLive.Web
   ```
-- [ ] Check health: `curl -s http://127.0.0.1:5210/api/health`.
-- [ ] Check browser-safe config: `curl -s http://127.0.0.1:5210/api/config`.
-- [ ] Open operator view: `http://127.0.0.1:5210/?view=operator`.
-- [ ] Open display view: `http://127.0.0.1:5210/?view=display`.
+- [ ] Check health: `curl -s http://localhost:5280/api/health`.
+- [ ] Open operator view: `http://localhost:5280/?view=operator` or `<deployed-url>/?view=operator`.
+- [ ] Open display view if needed: `http://localhost:5280/?view=display` or `<deployed-url>/?view=display`.
+- [ ] Sign in with the configured operator credentials.
 - [ ] Grant microphone permission in the operator browser.
 - [ ] Click a safe question or use hold-to-talk once to satisfy browser autoplay/user-gesture requirements.
 - [ ] Confirm avatar video and audio arrive.
@@ -44,5 +41,5 @@
 ## Known limitations to brief stakeholders
 
 - [ ] Each browser tab opens its own `/ws/session`; shared operator+display rooms are future work.
-- [ ] Agent mode is pending because `company-direction-avatar` does not yet exist in `proj-default`.
-- [ ] CLI live microphone/speaker mode is Windows-only; Linux/WSL should use `--text` or `--audio-file`.
+- [ ] Agent mode is opt-in and requires a Voice Live agent created in the Azure AI Foundry portal.
+- [ ] Browsers require a user gesture before video/audio autoplay; the operator should sign in, grant mic permission, then press a control before showtime.
