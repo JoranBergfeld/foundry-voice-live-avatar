@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environmentName": { "value": "${AZURE_ENV_NAME}" },
+    "location": { "value": "${AZURE_LOCATION}" },
+    "authUsername": { "value": "${AUTH_USERNAME}" },
+    "authPassword": { "value": "${AUTH_PASSWORD}" },
+    "voiceLiveMode": { "value": "${VOICELIVE_MODE=agent}" },
+    "linuxFxVersion": { "value": "${LINUX_FX_VERSION=DOTNETCORE|10.0}" }
+  }
+}
