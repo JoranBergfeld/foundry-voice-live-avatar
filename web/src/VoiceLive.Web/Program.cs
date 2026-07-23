@@ -19,6 +19,7 @@ builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.Cookies.C
 builder.Services.AddAuthorization();
 var configDir = builder.Configuration["ConfigDir"] ?? "config";
 var envSessionMode = builder.Configuration["VOICELIVE_MODE"];
+builder.Services.AddSingleton(new VoiceLive.Web.Session.SessionGate(2));
 var app = builder.Build();
 
 app.UseWebSockets();
@@ -63,7 +64,7 @@ app.MapGet("/api/config", () =>
     }
 });
 
-app.Map("/ws/session", async (HttpContext context, ILogger<VoiceLiveWebSocketBridge> logger) =>
+app.Map("/ws/session", async (HttpContext context, SessionGate gate, ILogger<VoiceLiveWebSocketBridge> logger) =>
 {
     if (!context.WebSockets.IsWebSocketRequest)
     {
@@ -71,8 +72,17 @@ app.Map("/ws/session", async (HttpContext context, ILogger<VoiceLiveWebSocketBri
         await context.Response.WriteAsJsonAsync(new { error = "Expected a WebSocket request." });
         return;
     }
-
+    if (!OriginAllowed(context, Array.Empty<string>()))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return;
+    }
     using var socket = await context.WebSockets.AcceptWebSocketAsync();
+    if (!gate.TryEnter())
+    {
+        await SendStartupErrorAsync(socket, "The server is at capacity. Try again shortly.", context.RequestAborted);
+        return;
+    }
     try
     {
         var loaded = WebConfigLoader.LoadServerSession(configDir);
@@ -82,6 +92,10 @@ app.Map("/ws/session", async (HttpContext context, ILogger<VoiceLiveWebSocketBri
     catch (WebConfigValidationException ex)
     {
         await SendStartupErrorAsync(socket, ex.Message, context.RequestAborted);
+    }
+    finally
+    {
+        gate.Exit();
     }
 });
 
@@ -95,6 +109,16 @@ static async Task SendStartupErrorAsync(WebSocket socket, string message, Cancel
         await socket.SendAsync(bytes, WebSocketMessageType.Text, WebSocketMessageFlags.EndOfMessage, ct);
         await socket.CloseAsync(WebSocketCloseStatus.InternalServerError, "configuration failed", ct);
     }
+}
+
+static bool OriginAllowed(HttpContext ctx, string[] allowed)
+{
+    var origin = ctx.Request.Headers.Origin.ToString();
+    if (string.IsNullOrEmpty(origin)) return true; // non-browser client (no Origin)
+    if (allowed.Length > 0 && allowed.Contains(origin, StringComparer.OrdinalIgnoreCase)) return true;
+    // same-origin: Origin scheme+host[:port] equals request host
+    var self = $"{ctx.Request.Scheme}://{ctx.Request.Host.Value}";
+    return string.Equals(origin, self, StringComparison.OrdinalIgnoreCase);
 }
 
 app.Run();
