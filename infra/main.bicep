@@ -15,7 +15,7 @@ param authUsername string
 param authPassword string
 
 @description('Voice Live mode: model or agent')
-param voiceLiveMode string = 'agent'
+param voiceLiveMode string = 'model'
 
 @description('Voice Live API version')
 param apiVersion string = '2025-10-01'
@@ -45,7 +45,6 @@ module resources 'resources.bicep' = {
     voiceLiveMode: voiceLiveMode
     apiVersion: apiVersion
     linuxFxVersion: linuxFxVersion
-    environmentName: environmentName
   }
 }
 

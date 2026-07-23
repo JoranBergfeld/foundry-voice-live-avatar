@@ -7,7 +7,6 @@ param authPassword string
 param voiceLiveMode string
 param apiVersion string
 param linuxFxVersion string
-param environmentName string
 
 var aiName = 'ai${token}'
 var projectName = 'proj-default'
@@ -33,16 +32,6 @@ resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
   location: location
   identity: { type: 'SystemAssigned' }
   properties: { displayName: 'Voice Live Avatar' }
-}
-
-resource agentModel 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
-  parent: ai
-  name: 'gpt-4o-mini'
-  sku: { name: 'GlobalStandard', capacity: 30 }
-  properties: {
-    model: { format: 'OpenAI', name: 'gpt-4o-mini', version: '2024-07-18' }
-    versionUpgradeOption: 'OnceCurrentVersionExpired'
-  }
 }
 
 resource logs 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {

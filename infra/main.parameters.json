@@ -6,7 +6,7 @@
     "location": { "value": "${AZURE_LOCATION}" },
     "authUsername": { "value": "${AUTH_USERNAME}" },
     "authPassword": { "value": "${AUTH_PASSWORD}" },
-    "voiceLiveMode": { "value": "${VOICELIVE_MODE=agent}" },
+    "voiceLiveMode": { "value": "${VOICELIVE_MODE=model}" },
     "linuxFxVersion": { "value": "${LINUX_FX_VERSION=DOTNETCORE|10.0}" }
   }
 }
