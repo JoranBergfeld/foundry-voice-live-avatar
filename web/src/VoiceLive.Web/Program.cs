@@ -22,7 +22,7 @@ var envSessionMode = builder.Configuration["VOICELIVE_MODE"];
 builder.Services.AddSingleton(new VoiceLive.Web.Session.SessionGate(2));
 var app = builder.Build();
 
-app.UseWebSockets();
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
 
 app.UseAuthentication();
 app.Use(async (ctx, next) =>

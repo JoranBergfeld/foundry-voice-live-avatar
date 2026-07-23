@@ -16,6 +16,7 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
     private IReadOnlyList<object> _iceServers = [];
     private string? _currentTurnId;
     private bool _readySent;
+    private const int MaxMessageBytes = 1024 * 1024;
 
     public async Task RunAsync(WebSocket socket, CancellationToken requestAborted)
     {
@@ -179,6 +180,12 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                     if (result.MessageType == WebSocketMessageType.Close)
                         return;
                     message.Write(buffer, 0, result.Count);
+                    if (message.Length > MaxMessageBytes)
+                    {
+                        logger.LogWarning("Browser message exceeded {Max} bytes; closing socket.", MaxMessageBytes);
+                        await CloseIfOpenAsync(socket, WebSocketCloseStatus.MessageTooBig, "message too big", ct);
+                        return;
+                    }
                 } while (!result.EndOfMessage);
 
                 var payload = message.ToArray();
@@ -190,7 +197,7 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                 }
 
                 if (result.MessageType == WebSocketMessageType.Text)
-                    await HandleControlMessageAsync(session, Encoding.UTF8.GetString(payload), ct);
+                    await HandleControlMessageAsync(session, socket, Encoding.UTF8.GetString(payload), ct);
             }
         }
         finally
@@ -199,53 +206,59 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
         }
     }
 
-    private async Task HandleControlMessageAsync(VoiceLiveSession session, string json, CancellationToken ct)
+    private async Task HandleControlMessageAsync(VoiceLiveSession session, WebSocket socket, string json, CancellationToken ct)
     {
-        using var doc = JsonDocument.Parse(json);
-        if (!doc.RootElement.TryGetProperty("t", out var tProp)) return;
-
-        switch (tProp.GetString())
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(json); }
+        catch (JsonException ex) { logger.LogDebug(ex, "Ignoring malformed control frame."); return; }
+        using (doc)
         {
-            case "avatar-offer":
-                if (doc.RootElement.TryGetProperty("sdp", out var sdp))
-                    await session.ConnectAvatarAsync(EncodeAvatarOffer(sdp.GetString() ?? string.Empty), ct);
-                break;
-            case "start-turn":
-                _currentTurnId = CreateTurnId();
-                await session.StartAudioTurnAsync(_currentTurnId, ct);
-                break;
-            case "end-turn":
-                var turnId = _currentTurnId ?? CreateTurnId();
-                await session.EndAudioTurnAsync(turnId, ct);
-                _currentTurnId = null;
-                await session.CommitInputAudioAsync(ct);
-                await session.StartResponseAsync(ct);
-                break;
-            case "barge-in":
-                await session.CancelResponseAsync(ct);
-                break;
-            case "say":
-                if (doc.RootElement.TryGetProperty("text", out var text))
-                {
-                    var prompt = text.GetString();
-                    if (!string.IsNullOrWhiteSpace(prompt))
+            if (!doc.RootElement.TryGetProperty("t", out var tProp)) return;
+
+            switch (tProp.GetString())
+            {
+                case "avatar-offer":
+                    if (doc.RootElement.TryGetProperty("sdp", out var sdp))
+                        await session.ConnectAvatarAsync(EncodeAvatarOffer(sdp.GetString() ?? string.Empty), ct);
+                    break;
+                case "start-turn":
+                    _currentTurnId = CreateTurnId();
+                    await session.StartAudioTurnAsync(_currentTurnId, ct);
+                    break;
+                case "end-turn":
+                    var turnId = _currentTurnId ?? CreateTurnId();
+                    await session.EndAudioTurnAsync(turnId, ct);
+                    _currentTurnId = null;
+                    await session.CommitInputAudioAsync(ct);
+                    await session.StartResponseAsync(ct);
+                    break;
+                case "barge-in":
+                    await session.CancelResponseAsync(ct);
+                    break;
+                case "say":
+                    if (doc.RootElement.TryGetProperty("text", out var text))
                     {
-                        if (config.Mode == "agent")
+                        var prompt = text.GetString();
+                        if (!string.IsNullOrWhiteSpace(prompt))
                         {
-                            // Agent mode ignores per-response instructions, so inject the
-                            // operator prompt as a user turn to make the hosted agent respond.
-                            await session.AddItemAsync(new UserMessageItem(prompt), ct);
-                            await session.StartResponseAsync(ct);
-                        }
-                        else
-                        {
-                            await session.StartResponseAsync(prompt, ct);
+                            if (config.Mode == "agent")
+                            {
+                                // Agent mode ignores per-response instructions, so inject the
+                                // operator prompt as a user turn to make the hosted agent respond.
+                                await session.AddItemAsync(new UserMessageItem(prompt), ct);
+                                await session.StartResponseAsync(ct);
+                            }
+                            else
+                            {
+                                await session.StartResponseAsync(prompt, ct);
+                            }
                         }
                     }
-                }
-                break;
-            case "ping":
-                break;
+                    break;
+                case "ping":
+                    await SendJsonAsync(socket, new { t = "pong" }, ct);
+                    break;
+            }
         }
     }
 
@@ -322,6 +335,18 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
     }
 
     private static string CreateTurnId() => "turn-" + Guid.NewGuid().ToString("N");
+
+    public static bool TryGetControlType(string json, out string? type)
+    {
+        type = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("t", out var t)) type = t.GetString();
+            return true;
+        }
+        catch (JsonException) { return false; }
+    }
 
     private string SafeError(Exception ex) => ex switch
     {
