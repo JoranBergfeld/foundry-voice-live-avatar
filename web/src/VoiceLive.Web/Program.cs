@@ -20,6 +20,14 @@ builder.Services.AddAuthorization();
 var configDir = builder.Configuration["ConfigDir"] ?? "config";
 var envSessionMode = builder.Configuration["VOICELIVE_MODE"];
 builder.Services.AddSingleton(new VoiceLive.Web.Session.SessionGate(2));
+builder.Services.AddSingleton<Azure.Core.TokenCredential>(_ =>
+{
+    var clientId = builder.Configuration["AZURE_CLIENT_ID"];
+    var options = new Azure.Identity.DefaultAzureCredentialOptions();
+    if (!string.IsNullOrWhiteSpace(clientId)) options.ManagedIdentityClientId = clientId;
+    return new Azure.Identity.DefaultAzureCredential(options);
+});
+builder.Services.AddSingleton<VoiceLive.Web.Session.IVoiceLiveBridgeFactory, VoiceLive.Web.Session.VoiceLiveBridgeFactory>();
 var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
@@ -81,7 +89,7 @@ app.MapGet("/api/config", () =>
     }
 });
 
-app.Map("/ws/session", async (HttpContext context, SessionGate gate, ILogger<VoiceLiveWebSocketBridge> logger) =>
+app.Map("/ws/session", async (HttpContext context, SessionGate gate, IVoiceLiveBridgeFactory factory) =>
 {
     if (!context.WebSockets.IsWebSocketRequest)
     {
@@ -104,7 +112,7 @@ app.Map("/ws/session", async (HttpContext context, SessionGate gate, ILogger<Voi
     {
         var loaded = WebConfigLoader.LoadServerSession(configDir);
         var serverConfig = loaded with { Mode = SessionModeResolver.Resolve(loaded.Mode, envSessionMode) };
-        await new VoiceLiveWebSocketBridge(serverConfig, logger).RunAsync(socket, context.RequestAborted);
+        await factory.Create(serverConfig).RunAsync(socket, context.RequestAborted);
     }
     catch (WebConfigValidationException ex)
     {

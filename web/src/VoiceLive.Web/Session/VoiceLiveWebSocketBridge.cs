@@ -4,12 +4,15 @@ using System.Text;
 using System.Text.Json;
 using Azure;
 using Azure.AI.VoiceLive;
-using Azure.Identity;
+using Azure.Core;
 using VoiceLive.Web.Config;
 
 namespace VoiceLive.Web.Session;
 
-public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger<VoiceLiveWebSocketBridge> logger)
+public sealed class VoiceLiveWebSocketBridge(
+    ServerSessionConfig config,
+    TokenCredential credential,
+    ILogger<VoiceLiveWebSocketBridge> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -28,7 +31,7 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
             var serviceVersion = VoiceLiveServiceVersionMapper.Map(config.ApiVersion, message => logger.LogWarning("{Message}", message));
             var client = new VoiceLiveClient(
                 new Uri(config.Endpoint),
-                new DefaultAzureCredential(),
+                credential,
                 new VoiceLiveClientOptions(serviceVersion));
 
             if (config.Mode == "agent")
