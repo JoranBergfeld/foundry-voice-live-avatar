@@ -310,7 +310,7 @@ class ThinVoiceLiveClient {
     this.pc = undefined;
     this.setStatus("avatar", "unavailable");
     this.setStatus("webrtc", "avatar disabled (capacity)");
-    if (this.operator) this.operator.noteTool(`Avatar unavailable: ${message}`);
+    if (this.operator) this.operator.noteNonFatal(`Avatar unavailable: ${message}`);
     else (this.view as DisplayView).setStatus(`Avatar unavailable: ${message}`);
   }
 

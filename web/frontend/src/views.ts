@@ -24,6 +24,7 @@ export type OperatorView = {
   setHoldActive(active: boolean): void;
   addTranscript(role: "user" | "agent", text: string, final: boolean): void;
   noteTool(text: string): void;
+  noteNonFatal(message: string): void;
 };
 
 export type DisplayView = {
@@ -127,8 +128,14 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
   toolsEmpty.className = "tools-empty";
   toolsEmpty.textContent = "No tool calls yet.";
   toolsPanel.append(toolsHeading, toolsList, toolsEmpty);
+  toolsPanel.hidden = true;
 
-  shell.append(heading, error, avatarPanel, configPanel, statusPanel, controls, transcriptPanel, toolsPanel);
+  const nonFatal = document.createElement("div");
+  nonFatal.className = "nonfatal-notice";
+  nonFatal.hidden = true;
+  nonFatal.setAttribute("role", "status");
+
+  shell.append(heading, error, nonFatal, avatarPanel, configPanel, statusPanel, controls, transcriptPanel, toolsPanel);
   root.append(shell);
 
   function addTranscript(role: "user" | "agent", text: string, final: boolean) {
@@ -156,6 +163,7 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
       setText(sessionModeLine, `Session mode: ${config.mode ?? "model"}`);
       setText(modeLine, `Turn-taking: ${config.activeMode}`);
       setText(avatarLine, `Avatar: ${config.avatarCharacter ?? "configured"}${config.avatarStyle ? ` (${config.avatarStyle})` : ""}`);
+      toolsPanel.hidden = config.mode !== "agent";
       safeQuestionPanel.replaceChildren();
       safeQuestionButtons.splice(0);
       for (const question of config.safeQuestions) {
@@ -196,6 +204,10 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
       toolsList.append(line);
       while (toolsList.childElementCount > 8) toolsList.firstElementChild?.remove();
       line.scrollIntoView({ block: "nearest" });
+    },
+    noteNonFatal(message) {
+      nonFatal.hidden = false;
+      nonFatal.textContent = message;
     },
   };
 }
