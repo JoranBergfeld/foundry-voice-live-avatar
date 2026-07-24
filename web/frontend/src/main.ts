@@ -264,6 +264,7 @@ class ThinVoiceLiveClient {
       if (activeMode === "open-mic" || activeMode === "hybrid") {
         await this.audioContext.resume();
         this.streamingMic = true;
+        this.interactive?.setMuted?.(false);
         this.setStatus("turn", `${activeMode}: streaming continuously`);
       } else {
         this.setStatus("turn", "gated: hold to talk");
