@@ -9,3 +9,6 @@ web/src/VoiceLive.Web/wwwroot/app.js.map
 # OS/editor
 .DS_Store
 .vs/
+
+# Superpowers brainstorming companion
+.superpowers/
