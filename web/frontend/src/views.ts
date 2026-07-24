@@ -306,7 +306,10 @@ export function renderLandingView(root: HTMLElement): LandingView {
       // The landing screen is intentionally minimal; config drives only the talk control.
     },
     setStatus(name, value) {
-      if (name !== "connection" && name !== "webrtc" && name !== "avatar") return;
+      // The pill is only a transient connection indicator. Routine per-turn
+      // avatar states (speaking/idle) are conveyed by the avatar itself and
+      // must not resurface the pill after the connection is established.
+      if (name !== "connection" && name !== "webrtc") return;
       if (name === "webrtc" && value === "connected") {
         pill.hidden = true;
         return;
