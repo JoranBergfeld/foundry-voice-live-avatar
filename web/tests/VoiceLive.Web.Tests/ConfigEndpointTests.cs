@@ -1,15 +1,10 @@
 using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
-public class ConfigEndpointTests : IClassFixture<WebApplicationFactory<Program>>
+public class ConfigEndpointTests : IClassFixture<TestAppFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
-    public ConfigEndpointTests(WebApplicationFactory<Program> f)
-    {
-        var repoConfig = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..","..","..","..","..","..","config"));
-        _factory = f.WithWebHostBuilder(b => b.UseSetting("ConfigDir", repoConfig));
-    }
+    private readonly TestAppFactory _factory;
+    public ConfigEndpointTests(TestAppFactory factory) => _factory = factory;
 
     [Fact]
     public async Task Health_returns_ok()
@@ -21,10 +16,24 @@ public class ConfigEndpointTests : IClassFixture<WebApplicationFactory<Program>>
     [Fact]
     public async Task Config_returns_sanitized_client_config()
     {
-        var res = await _factory.CreateClient().GetAsync("/api/config");
+        var client = await AuthedClientAsync();
+        var res = await client.GetAsync("/api/config");
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         var body = await res.Content.ReadAsStringAsync();
         Assert.Contains("swedencentral", body);
         Assert.DoesNotContain("services.ai.azure.com", body); // endpoint must not leak to the browser
+    }
+
+    private async Task<HttpClient> AuthedClientAsync()
+    {
+        var client = _factory.CreateClient();
+        var form = new FormUrlEncodedContent(new[]
+        {
+            new KeyValuePair<string, string>("username", "operator"),
+            new KeyValuePair<string, string>("password", "rehearsal"),
+        });
+        var login = await client.PostAsync("/login", form);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        return client;
     }
 }

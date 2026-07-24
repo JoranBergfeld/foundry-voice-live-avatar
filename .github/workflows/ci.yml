@@ -1,34 +1,24 @@
 name: CI
-
 on: [push, pull_request]
-
 jobs:
-  cli:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - run: dotnet test cli/VoiceLive.Cli.sln
-
   web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-      - run: dotnet test web/VoiceLive.Web.sln
-
+        with: { dotnet-version: 10.0.x }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true
   frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: npm install
+        with: { node-version: 24 }
+      - run: npm ci
+        working-directory: web/frontend
+      - run: npx tsc --noEmit
         working-directory: web/frontend
       - run: npm run build
         working-directory: web/frontend

@@ -1,73 +1,95 @@
 using System.Buffers;
+using System.Diagnostics.Metrics;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using Azure;
 using Azure.AI.VoiceLive;
-using Azure.Identity;
+using Azure.Core;
 using VoiceLive.Web.Config;
 
 namespace VoiceLive.Web.Session;
 
-public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger<VoiceLiveWebSocketBridge> logger)
+public sealed class VoiceLiveWebSocketBridge(
+    ServerSessionConfig config,
+    TokenCredential credential,
+    string modelInstructions,
+    ILogger<VoiceLiveWebSocketBridge> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly Meter Meter = new("VoiceLive.Web");
+    private static readonly UpDownCounter<long> ActiveSessions = Meter.CreateUpDownCounter<long>("voicelive.active_sessions");
+    private static readonly Histogram<double> SessionDurationMs = Meter.CreateHistogram<double>("voicelive.session_duration_ms");
+    private static readonly Counter<long> Errors = Meter.CreateCounter<long>("voicelive.errors");
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private IReadOnlyList<object> _iceServers = [];
     private string? _currentTurnId;
     private bool _readySent;
+    private const int MaxMessageBytes = 1024 * 1024;
 
     public async Task RunAsync(WebSocket socket, CancellationToken requestAborted)
     {
-        VoiceLiveSession? session = null;
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
-
+        var sessionId = Guid.NewGuid().ToString("N")[..8];
+        using var scope = logger.BeginScope("session:{SessionId}", sessionId);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        ActiveSessions.Add(1);
         try
         {
-            var serviceVersion = VoiceLiveServiceVersionMapper.Map(config.ApiVersion, message => logger.LogWarning("{Message}", message));
-            var client = new VoiceLiveClient(
-                new Uri(config.Endpoint),
-                new DefaultAzureCredential(),
-                new VoiceLiveClientOptions(serviceVersion));
+            VoiceLiveSession? session = null;
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
 
-            if (config.Mode == "agent")
+            try
             {
-                logger.LogInformation("Starting Voice Live session in AGENT mode ({Agent} / {Project})", config.Agent.AgentName, config.Agent.AgentProjectName);
-                var agent = new AgentSessionConfig(config.Agent.AgentName, config.Agent.AgentProjectName);
-                session = await client.StartSessionAsync(SessionTarget.FromAgent(agent), cts.Token);
-                await session.ConfigureSessionAsync(SessionOptionsBuilder.BuildForAgent(config), cts.Token);
+                var serviceVersion = VoiceLiveServiceVersionMapper.Map(config.ApiVersion);
+                var client = new VoiceLiveClient(
+                    new Uri(config.Endpoint),
+                    credential,
+                    new VoiceLiveClientOptions(serviceVersion));
+
+                if (config.Mode == "agent")
+                {
+                    logger.LogInformation("Starting Voice Live session in AGENT mode ({Agent} / {Project})", config.Agent.AgentName, config.Agent.AgentProjectName);
+                    var agent = new AgentSessionConfig(config.Agent.AgentName, config.Agent.AgentProjectName);
+                    session = await client.StartSessionAsync(SessionTarget.FromAgent(agent), cts.Token);
+                    await session.ConfigureSessionAsync(SessionOptionsBuilder.BuildForAgent(config), cts.Token);
+                }
+                else
+                {
+                    logger.LogInformation("Starting Voice Live session in MODEL mode ({Model})", config.Model);
+                    session = await client.StartSessionAsync(config.Model, cts.Token);
+                    var sessionOptions = SessionOptionsBuilder.Build(config, modelInstructions);
+                    await session.ConfigureSessionAsync(sessionOptions, cts.Token);
+                }
+
+                var updateTask = PumpVoiceLiveUpdatesAsync(session, socket, cts.Token);
+                var browserTask = PumpBrowserMessagesAsync(session, socket, cts.Token);
+
+                await Task.WhenAny(updateTask, browserTask);
+                cts.Cancel();
+                await Task.WhenAll(SwallowCancellation(updateTask), SwallowCancellation(browserTask));
             }
-            else
+            catch (OperationCanceledException) when (requestAborted.IsCancellationRequested || socket.State is WebSocketState.Closed or WebSocketState.Aborted)
             {
-                logger.LogInformation("Starting Voice Live session in MODEL mode ({Model})", config.Model);
-                session = await client.StartSessionAsync(config.Model, cts.Token);
-                var sessionOptions = SessionOptionsBuilder.Build(config, "You are a helpful assistant. Reply in concise, spoken sentences.");
-                await session.ConfigureSessionAsync(sessionOptions, cts.Token);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Voice Live WebSocket bridge failed");
+                await SendErrorAndCloseAsync(socket, SafeError(ex), CancellationToken.None);
+                return;
+            }
+            finally
+            {
+                if (session is not null)
+                    await session.DisposeAsync();
             }
 
-            var updateTask = PumpVoiceLiveUpdatesAsync(session, socket, cts.Token);
-            var browserTask = PumpBrowserMessagesAsync(session, socket, cts.Token);
-
-            await Task.WhenAny(updateTask, browserTask);
-            cts.Cancel();
-            await Task.WhenAll(SwallowCancellation(updateTask), SwallowCancellation(browserTask));
-        }
-        catch (OperationCanceledException) when (requestAborted.IsCancellationRequested || socket.State is WebSocketState.Closed or WebSocketState.Aborted)
-        {
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Voice Live WebSocket bridge failed");
-            await SendErrorAndCloseAsync(socket, SafeError(ex), CancellationToken.None);
-            return;
+            await CloseIfOpenAsync(socket, WebSocketCloseStatus.NormalClosure, "session closed", CancellationToken.None);
         }
         finally
         {
-            if (session is not null)
-                await session.DisposeAsync();
+            ActiveSessions.Add(-1);
+            SessionDurationMs.Record(sw.Elapsed.TotalMilliseconds);
         }
-
-        await CloseIfOpenAsync(socket, WebSocketCloseStatus.NormalClosure, "session closed", CancellationToken.None);
     }
 
     private async Task PumpVoiceLiveUpdatesAsync(VoiceLiveSession session, WebSocket socket, CancellationToken ct)
@@ -155,9 +177,24 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                     await SendToolAsync(socket, "list-failed", name: null, mcpFail.ItemId, ct);
                     break;
                 case SessionUpdateError error:
+                    var errorCode = error.Error?.Code ?? error.Error?.Type;
+                    Errors.Add(1, new KeyValuePair<string, object?>("code", errorCode ?? "unknown"));
+                    if (IsAvatarCapacityError(errorCode))
+                    {
+                        logger.LogWarning(
+                            "Avatar rendering unavailable ({Code}); continuing voice-only. Service message: {Message}",
+                            errorCode, error.Error?.Message);
+                        await SendJsonAsync(socket, new
+                        {
+                            t = "avatar-error",
+                            code = errorCode,
+                            message = "Avatar rendering is unavailable on this Voice Live resource (capacity or quota). The voice session continues without avatar video. Request an avatar rendering quota increase for this resource, or point VoiceLive__Endpoint at an avatar-enabled resource."
+                        }, ct);
+                        break;
+                    }
                     var message = error.Error is null
                         ? "Voice Live service reported an error."
-                        : $"Voice Live service error ({error.Error.Code ?? error.Error.Type}): {error.Error.Message}";
+                        : $"Voice Live service error ({errorCode}): {error.Error.Message}";
                     await SendErrorAndCloseAsync(socket, message, ct);
                     return;
             }
@@ -179,6 +216,12 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                     if (result.MessageType == WebSocketMessageType.Close)
                         return;
                     message.Write(buffer, 0, result.Count);
+                    if (message.Length > MaxMessageBytes)
+                    {
+                        logger.LogWarning("Browser message exceeded {Max} bytes; closing socket.", MaxMessageBytes);
+                        await CloseIfOpenAsync(socket, WebSocketCloseStatus.MessageTooBig, "message too big", ct);
+                        return;
+                    }
                 } while (!result.EndOfMessage);
 
                 var payload = message.ToArray();
@@ -190,7 +233,7 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
                 }
 
                 if (result.MessageType == WebSocketMessageType.Text)
-                    await HandleControlMessageAsync(session, Encoding.UTF8.GetString(payload), ct);
+                    await HandleControlMessageAsync(session, socket, Encoding.UTF8.GetString(payload), ct);
             }
         }
         finally
@@ -199,53 +242,59 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
         }
     }
 
-    private async Task HandleControlMessageAsync(VoiceLiveSession session, string json, CancellationToken ct)
+    private async Task HandleControlMessageAsync(VoiceLiveSession session, WebSocket socket, string json, CancellationToken ct)
     {
-        using var doc = JsonDocument.Parse(json);
-        if (!doc.RootElement.TryGetProperty("t", out var tProp)) return;
-
-        switch (tProp.GetString())
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(json); }
+        catch (JsonException ex) { logger.LogDebug(ex, "Ignoring malformed control frame."); return; }
+        using (doc)
         {
-            case "avatar-offer":
-                if (doc.RootElement.TryGetProperty("sdp", out var sdp))
-                    await session.ConnectAvatarAsync(EncodeAvatarOffer(sdp.GetString() ?? string.Empty), ct);
-                break;
-            case "start-turn":
-                _currentTurnId = CreateTurnId();
-                await session.StartAudioTurnAsync(_currentTurnId, ct);
-                break;
-            case "end-turn":
-                var turnId = _currentTurnId ?? CreateTurnId();
-                await session.EndAudioTurnAsync(turnId, ct);
-                _currentTurnId = null;
-                await session.CommitInputAudioAsync(ct);
-                await session.StartResponseAsync(ct);
-                break;
-            case "barge-in":
-                await session.CancelResponseAsync(ct);
-                break;
-            case "say":
-                if (doc.RootElement.TryGetProperty("text", out var text))
-                {
-                    var prompt = text.GetString();
-                    if (!string.IsNullOrWhiteSpace(prompt))
+            if (!doc.RootElement.TryGetProperty("t", out var tProp)) return;
+
+            switch (tProp.GetString())
+            {
+                case "avatar-offer":
+                    if (doc.RootElement.TryGetProperty("sdp", out var sdp))
+                        await session.ConnectAvatarAsync(EncodeAvatarOffer(sdp.GetString() ?? string.Empty), ct);
+                    break;
+                case "start-turn":
+                    _currentTurnId = CreateTurnId();
+                    await session.StartAudioTurnAsync(_currentTurnId, ct);
+                    break;
+                case "end-turn":
+                    var turnId = _currentTurnId ?? CreateTurnId();
+                    await session.EndAudioTurnAsync(turnId, ct);
+                    _currentTurnId = null;
+                    await session.CommitInputAudioAsync(ct);
+                    await session.StartResponseAsync(ct);
+                    break;
+                case "barge-in":
+                    await session.CancelResponseAsync(ct);
+                    break;
+                case "say":
+                    if (doc.RootElement.TryGetProperty("text", out var text))
                     {
-                        if (config.Mode == "agent")
+                        var prompt = text.GetString();
+                        if (!string.IsNullOrWhiteSpace(prompt))
                         {
-                            // Agent mode ignores per-response instructions, so inject the
-                            // operator prompt as a user turn to make the hosted agent respond.
-                            await session.AddItemAsync(new UserMessageItem(prompt), ct);
-                            await session.StartResponseAsync(ct);
-                        }
-                        else
-                        {
-                            await session.StartResponseAsync(prompt, ct);
+                            if (config.Mode == "agent")
+                            {
+                                // Agent mode ignores per-response instructions, so inject the
+                                // operator prompt as a user turn to make the hosted agent respond.
+                                await session.AddItemAsync(new UserMessageItem(prompt), ct);
+                                await session.StartResponseAsync(ct);
+                            }
+                            else
+                            {
+                                await session.StartResponseAsync(prompt, ct);
+                            }
                         }
                     }
-                }
-                break;
-            case "ping":
-                break;
+                    break;
+                case "ping":
+                    await SendJsonAsync(socket, new { t = "pong" }, ct);
+                    break;
+            }
         }
     }
 
@@ -282,17 +331,31 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
         await CloseIfOpenAsync(socket, WebSocketCloseStatus.InternalServerError, "Voice Live session failed", ct);
     }
 
-    private static async Task CloseIfOpenAsync(WebSocket socket, WebSocketCloseStatus status, string description, CancellationToken ct)
+    private async Task CloseIfOpenAsync(WebSocket socket, WebSocketCloseStatus status, string description, CancellationToken ct)
     {
-        if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+        if (socket.State is not (WebSocketState.Open or WebSocketState.CloseReceived))
+            return;
+
+        try
         {
-            try
-            {
+            await _sendLock.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        try
+        {
+            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
                 await socket.CloseAsync(status, description, ct);
-            }
-            catch (Exception ex) when (ex is WebSocketException or OperationCanceledException)
-            {
-            }
+        }
+        catch (Exception ex) when (ex is WebSocketException or OperationCanceledException or InvalidOperationException)
+        {
+        }
+        finally
+        {
+            _sendLock.Release();
         }
     }
 
@@ -322,6 +385,24 @@ public sealed class VoiceLiveWebSocketBridge(ServerSessionConfig config, ILogger
     }
 
     private static string CreateTurnId() => "turn-" + Guid.NewGuid().ToString("N");
+
+    public static bool TryGetControlType(string json, out string? type)
+    {
+        type = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("t", out var t)) type = t.GetString();
+            return true;
+        }
+        catch (JsonException) { return false; }
+    }
+
+    private static bool IsAvatarCapacityError(string? signal) =>
+        !string.IsNullOrEmpty(signal)
+        && signal.Contains("avatar", StringComparison.OrdinalIgnoreCase)
+        && (signal.Contains("exhausted", StringComparison.OrdinalIgnoreCase)
+            || signal.Contains("capacity", StringComparison.OrdinalIgnoreCase));
 
     private string SafeError(Exception ex) => ex switch
     {

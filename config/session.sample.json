@@ -1,3 +1,4 @@
+// endpoint, apiVersion, and mode come from app settings (VoiceLive:Endpoint, VoiceLive:ApiVersion, VoiceLive:Mode; env vars VoiceLive__Endpoint, VoiceLive__ApiVersion, VoiceLive__Mode).
 {
   "region": "swedencentral",
   "model": "gpt-realtime",

@@ -1,19 +1,28 @@
 # Config schema
 
-The `/config` directory contains four JSON files shared by the CLI and web apps. All values below mirror the default config files.
+The `/config` directory contains the web app's JSON config files. All values below mirror the default config files. Endpoint, API version, and mode are app settings, not `session.json` fields.
+
+## App settings
+
+| Setting | Type | Required | Allowed values / default | Description |
+| --- | --- | --- | --- | --- |
+| `VoiceLive:Endpoint` | string | Required | Default development value points at the Foundry account endpoint | Voice Live account endpoint, e.g. `https://<account>.services.ai.azure.com`. Environment variable: `VoiceLive__Endpoint`. |
+| `VoiceLive:ApiVersion` | string | Required | Default: `2025-10-01` | Voice Live API version. Environment variable: `VoiceLive__ApiVersion`. |
+| `VoiceLive:Mode` | string | Required | `model`, `agent`; default: `model` | Session establishment mode. Environment variable: `VoiceLive__Mode`; `VOICELIVE_MODE` can also override it. |
+| `Auth:Username` | string | Required | Development default: `operator` | App login username. Environment variable: `Auth__Username`. |
+| `Auth:Password` | string | Required | Development default: `rehearsal` | App login password. Environment variable: `Auth__Password`. |
+
+`endpoint`, `apiVersion`, and `mode` are no longer in `config/session.json`. `session.model` is required only in **model** mode; in **agent** mode the Voice Live agent owns the model. Agent name and project live in `config/agent.json`.
 
 ## `session.json`
 
 | Field | Type | Required | Allowed values / default | Description |
 | --- | --- | --- | --- | --- |
-| `endpoint` | string | Required | Default: `wss://REPLACE-ME.services.ai.azure.com` | Voice Live websocket endpoint. |
 | `region` | string | Required | Default: `swedencentral` | Azure region for the Voice Live resource. |
-| `apiVersion` | string | Required | Default: `2026-04-10` | Voice Live API version. |
-| `mode` | string | Optional | `model`, `agent`; default: `model` | (Web app) Session establishment mode. `model` connects directly to `model`; `agent` connects to the Foundry agent in `agent.json` via `SessionTarget.FromAgent` (the agent owns model + instructions + tools; voice, avatar, audio, and turn-taking still apply). Env var `VOICELIVE_MODE` overrides this. |
-| `model` | string | Required | Default: `gpt-realtime` | Realtime model deployment name. |
+| `model` | string | Required in model mode | Default: `gpt-realtime` | Realtime model name. In agent mode the configured agent owns the model. |
 | `voice` | object | Required | Contains `type`, `name` | Voice selection. |
 | `voice.type` | string | Required | `azure-realtime-native`, `azure-standard`, `azure-custom`, `openai`; default: `azure-realtime-native` | Voice provider/type. |
-| `voice.name` | string | Required | Default: `andrew` | Voice name. |
+| `voice.name` | string | Required | Default: `en-US-AndrewNeural` | Voice name. |
 | `inputAudioSamplingRate` | number | Required | Default: `24000` | Input audio sampling rate in hertz. |
 | `inputAudioNoiseReduction` | object | Required | Contains `type` | Input audio noise reduction settings. |
 | `inputAudioNoiseReduction.type` | string | Required | Default: `azure_deep_noise_suppression` | Noise reduction mode. |
@@ -61,8 +70,8 @@ The `/config` directory contains four JSON files shared by the CLI and web apps.
 
 | Field | Type | Required | Allowed values / default | Description |
 | --- | --- | --- | --- | --- |
-| `agentName` | string | Required | Default: `company-direction-avatar` | Foundry agent name. |
-| `agentProjectName` | string | Required | Default: `proj-default` | Foundry agent project name (the short project name in the Foundry endpoint path, e.g. `proj-default`). |
+| `agentName` | string | Required for agent mode | Default: `company-direction-avatar` | Voice Live agent name. |
+| `agentProjectName` | string | Required for agent mode | Default: `proj-default` | Foundry agent project name (the short project name in the Foundry endpoint path, e.g. `proj-default`). |
 | `agentVersion` | string or null | Optional | Default: `null` | Optional pinned agent version. |
 | `conversationResumePolicy` | string | Required | `resume`, `fresh`; default: `resume` | Whether conversations resume or start fresh. |
 | `groundingStrategy` | string | Required | `pack`, `rag`, `both`; default: `pack` | Grounding source strategy. |
@@ -86,9 +95,13 @@ The `/config` directory contains four JSON files shared by the CLI and web apps.
 ## Validation rules
 
 - All fields marked required above must be present and non-empty where applicable.
+- `VoiceLive:Mode` / `VOICELIVE_MODE` must be one of `model` or `agent`; invalid values fail fast at startup.
+- `VoiceLive:Endpoint` and `VoiceLive:ApiVersion` must be configured.
+- `session.json` must not carry `endpoint`, `apiVersion`, or `mode`; those values come from app settings.
+- `session.json.model` is required in model mode and optional in agent mode.
 - `session.json.voice.type` must be one of `azure-realtime-native`, `azure-standard`, `azure-custom`, or `openai`.
-- `session.json.mode` (web app), if present, must be one of `model` or `agent`; the `VOICELIVE_MODE` environment variable (same allowed values) overrides it. Invalid values fail fast at startup.
 - `turntaking.json.activeMode` must be one of `open-mic`, `gated`, or `hybrid`, and the matching entry must exist in `modes`.
+- `agent.json.agentName` and `agent.json.agentProjectName` are required in agent mode.
 - `agent.json.groundingStrategy` must be one of `pack`, `rag`, or `both`.
 - `agent.json.conversationResumePolicy` must be one of `resume` or `fresh`.
 - Unknown values for `voice.type`, `turntaking.activeMode`, `agent.groundingStrategy`, or `agent.conversationResumePolicy` fail fast at startup.
