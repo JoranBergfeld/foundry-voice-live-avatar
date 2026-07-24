@@ -177,10 +177,24 @@ public sealed class VoiceLiveWebSocketBridge(
                     await SendToolAsync(socket, "list-failed", name: null, mcpFail.ItemId, ct);
                     break;
                 case SessionUpdateError error:
+                    var errorCode = error.Error?.Code ?? error.Error?.Type;
+                    Errors.Add(1, new KeyValuePair<string, object?>("code", errorCode ?? "unknown"));
+                    if (IsAvatarCapacityError(errorCode))
+                    {
+                        logger.LogWarning(
+                            "Avatar rendering unavailable ({Code}); continuing voice-only. Service message: {Message}",
+                            errorCode, error.Error?.Message);
+                        await SendJsonAsync(socket, new
+                        {
+                            t = "avatar-error",
+                            code = errorCode,
+                            message = "Avatar rendering is unavailable on this Voice Live resource (capacity or quota). The voice session continues without avatar video. Request an avatar rendering quota increase for this resource, or point VoiceLive__Endpoint at an avatar-enabled resource."
+                        }, ct);
+                        break;
+                    }
                     var message = error.Error is null
                         ? "Voice Live service reported an error."
-                        : $"Voice Live service error ({error.Error.Code ?? error.Error.Type}): {error.Error.Message}";
-                    Errors.Add(1, new KeyValuePair<string, object?>("code", error.Error?.Code ?? error.Error?.Type ?? "unknown"));
+                        : $"Voice Live service error ({errorCode}): {error.Error.Message}";
                     await SendErrorAndCloseAsync(socket, message, ct);
                     return;
             }
@@ -383,6 +397,12 @@ public sealed class VoiceLiveWebSocketBridge(
         }
         catch (JsonException) { return false; }
     }
+
+    private static bool IsAvatarCapacityError(string? signal) =>
+        !string.IsNullOrEmpty(signal)
+        && signal.Contains("avatar", StringComparison.OrdinalIgnoreCase)
+        && (signal.Contains("exhausted", StringComparison.OrdinalIgnoreCase)
+            || signal.Contains("capacity", StringComparison.OrdinalIgnoreCase));
 
     private string SafeError(Exception ex) => ex switch
     {

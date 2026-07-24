@@ -132,8 +132,9 @@ Failures are explicit and visible, not masked:
 - Config load failures make `/api/health` return 503.
 - Unauthenticated HTML requests redirect to `/login`.
 - Unauthenticated `/api/*` and `/ws/*` requests return 401.
-- The server forwards service errors to the browser as an `error` frame and closes the session.
-- The browser shows an error banner.
+- The server forwards fatal service errors to the browser as an `error` frame and closes the session.
+- Avatar rendering capacity/quota errors are non-fatal: the server sends an `avatar-error` frame and keeps the voice session running without avatar video.
+- The browser shows an error banner for fatal errors, or a non-fatal notice when only the avatar is unavailable.
 
 ## 10. Troubleshooting
 
@@ -142,6 +143,7 @@ Failures are explicit and visible, not masked:
 | Sign-in fails or session reports auth failure | Wrong app credentials, `az login` expired locally, wrong tenant/subscription, or missing RBAC | Check `Auth__Username` / `Auth__Password` in App Service settings; for local dev run `az login`, `az account set --subscription <subscription-id>`, and confirm the server identity has the recommended roles. |
 | `/api/health` returns 503 | Config failed to load or required app settings are missing | Check App Service settings for `VoiceLive__Endpoint`, `VoiceLive__ApiVersion`, `VoiceLive__Mode`, and auth settings; review Application Insights logs. |
 | No avatar video/audio in browser | Autoplay blocked, mic permission not granted, or WebRTC setup did not complete | Grant mic permission, click/press a control in the operator page, and reload the tab if the session closed. |
+| Avatar never appears; log shows `avatar_service_resource_exhausted` | The Voice Live resource has little or no avatar rendering quota (common on a freshly provisioned resource) | Request an avatar rendering quota increase for the resource via Azure support, or set `VoiceLive__Endpoint` to an avatar-enabled resource. Voice continues to work without avatar. |
 | Model mode unavailable or realtime model not found | Resource in a region without native realtime model support | Use `swedencentral`; West Europe is not sufficient for native `gpt-realtime`. |
 | Agent mode unavailable | The configured Voice Live agent does not exist in the configured Foundry project | Use model mode, or create the Voice Live agent in the Azure AI Foundry portal and redeploy with `VOICELIVE_MODE=agent`. |
 | App Service deployment fails because `.NET 10` is unavailable | `DOTNETCORE|10.0` is not available in the selected region | Run `azd env set LINUX_FX_VERSION ""` and redeploy self-contained. |

@@ -6,12 +6,14 @@ type AvatarAnswerFrame = { t: "avatar-answer"; sdp: string };
 type TranscriptFrame = { t: "user-transcript" | "agent-transcript"; text: string; final: boolean };
 type ErrorFrame = { t: "error"; message: string };
 type ToolFrame = { t: "tool"; phase: string; name?: string | null; callId?: string | null };
+type AvatarErrorFrame = { t: "avatar-error"; code?: string; message: string };
 type ServerFrame =
   | ReadyFrame
   | AvatarAnswerFrame
   | TranscriptFrame
   | ErrorFrame
   | ToolFrame
+  | AvatarErrorFrame
   | { t: "speech-started" | "speech-stopped" | "avatar-speaking" | "avatar-idle" | "response-done" };
 
 type ControlFrame =
@@ -124,6 +126,9 @@ class ThinVoiceLiveClient {
         this.operator?.noteTool(`tool ${label}${idSuffix}`);
         break;
       }
+      case "avatar-error":
+        this.handleAvatarError(frame.message);
+        break;
       case "error":
         this.fail(`Server error: ${frame.message}`);
         break;
@@ -297,6 +302,16 @@ class ThinVoiceLiveClient {
   private setStatus(name: "connection" | "speech" | "avatar" | "turn" | "webrtc" | "microphone", value: string) {
     if (this.operator) this.operator.setStatus(name, value);
     else if (name === "connection" || name === "webrtc" || name === "avatar") (this.view as DisplayView).setStatus(`${name}: ${value}`);
+  }
+
+  private handleAvatarError(message: string) {
+    // Avatar rendering is unavailable (e.g. capacity/quota); the voice session continues without video.
+    this.pc?.close();
+    this.pc = undefined;
+    this.setStatus("avatar", "unavailable");
+    this.setStatus("webrtc", "avatar disabled (capacity)");
+    if (this.operator) this.operator.noteTool(`Avatar unavailable: ${message}`);
+    else (this.view as DisplayView).setStatus(`Avatar unavailable: ${message}`);
   }
 
   private fail(message: string) {
