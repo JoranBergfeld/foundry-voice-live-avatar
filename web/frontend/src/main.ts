@@ -1,4 +1,4 @@
-import { renderDisplayView, renderOperatorView, type DisplayView, type OperatorView, type ReadyConfig } from "./views";
+import { renderDisplayView, renderOperatorView, type DisplayView, type InteractiveView, type OperatorView, type ReadyConfig } from "./views";
 
 type IceServerFrame = { urls: string[]; username?: string; credential?: string };
 type ReadyFrame = { t: "ready"; config: ReadyConfig; iceServers: IceServerFrame[] };
@@ -26,7 +26,7 @@ type ControlFrame =
 
 const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/session`;
 
-function isOperatorView(view: OperatorView | DisplayView): view is OperatorView {
+function isInteractiveView(view: InteractiveView | DisplayView): view is InteractiveView {
   return "holdButton" in view;
 }
 
@@ -53,8 +53,8 @@ function waitForIceGatheringComplete(pc: RTCPeerConnection): Promise<void> {
 }
 
 class ThinVoiceLiveClient {
-  private readonly view: OperatorView | DisplayView;
-  private readonly operator: OperatorView | undefined;
+  private readonly view: InteractiveView | DisplayView;
+  private readonly interactive: InteractiveView | undefined;
   private socket: WebSocket | undefined;
   private pc: RTCPeerConnection | undefined;
   private audioContext: AudioContext | undefined;
@@ -64,9 +64,9 @@ class ThinVoiceLiveClient {
   private readyConfig: ReadyConfig | undefined;
   private pingId = 0;
 
-  constructor(view: OperatorView | DisplayView) {
+  constructor(view: InteractiveView | DisplayView) {
     this.view = view;
-    this.operator = isOperatorView(view) ? view : undefined;
+    this.interactive = isInteractiveView(view) ? view : undefined;
   }
 
   start() {
@@ -103,7 +103,7 @@ class ThinVoiceLiveClient {
         break;
       case "user-transcript":
       case "agent-transcript":
-        this.operator?.addTranscript(frame.t === "user-transcript" ? "user" : "agent", frame.text, frame.final);
+        this.interactive?.addTranscript(frame.t === "user-transcript" ? "user" : "agent", frame.text, frame.final);
         break;
       case "speech-started":
         this.setStatus("speech", "started");
@@ -123,7 +123,7 @@ class ThinVoiceLiveClient {
       case "tool": {
         const label = frame.name ? `${frame.phase}: ${frame.name}` : frame.phase;
         const idSuffix = frame.callId ? ` (${frame.callId})` : "";
-        this.operator?.noteTool(`tool ${label}${idSuffix}`);
+        this.interactive?.noteTool?.(`tool ${label}${idSuffix}`);
         break;
       }
       case "avatar-error":
@@ -137,43 +137,55 @@ class ThinVoiceLiveClient {
 
   private async onReady(frame: ReadyFrame) {
     this.readyConfig = frame.config;
-    if (this.operator) {
-      this.operator.clearError();
-      this.operator.setConfig(frame.config);
-      this.operator.setReady(true);
-      this.wireOperatorControls(frame.config);
+    if (this.interactive) {
+      this.interactive.clearError();
+      this.interactive.setConfig(frame.config);
+      this.interactive.setReady(true);
+      this.wireInteractiveControls(frame.config);
     } else {
       (this.view as DisplayView).setStatus(`Ready: ${frame.config.agentName}`);
     }
     this.setStatus("connection", "ready");
 
     await this.negotiateAvatar(frame.iceServers);
-    if (this.operator) await this.prepareMicrophone(frame.config.activeMode);
+    if (this.interactive) await this.prepareMicrophone(frame.config.activeMode);
   }
 
-  private wireOperatorControls(config: ReadyConfig) {
-    if (!this.operator) return;
+  private wireInteractiveControls(config: ReadyConfig) {
+    const view = this.interactive;
+    if (!view) return;
     const gated = config.activeMode === "gated";
 
-    this.operator.holdButton.hidden = !gated;
-    this.operator.holdButton.onpointerdown = (event) => {
-      event.preventDefault();
-      if (!gated) return;
-      this.startGatedTurn();
-    };
-    const endGated = () => {
-      if (gated) this.endGatedTurn();
-    };
-    this.operator.holdButton.onpointerup = endGated;
-    this.operator.holdButton.onpointerleave = endGated;
-    this.operator.holdButton.onpointercancel = endGated;
-    this.operator.stopButton.onclick = () => {
-      this.send({ t: "barge-in" });
-      this.setStatus("turn", "barge-in sent");
-    };
-    this.operator.repeatButton.onclick = () => this.sendSay("Please repeat your previous answer.");
-    for (const safeButton of this.operator.safeQuestionButtons) {
-      safeButton.onclick = () => this.sendSay(safeButton.textContent ?? "");
+    if (gated) {
+      view.holdButton.hidden = false;
+      view.holdButton.onpointerdown = (event) => {
+        event.preventDefault();
+        this.startGatedTurn();
+      };
+      const endGated = () => this.endGatedTurn();
+      view.holdButton.onpointerup = endGated;
+      view.holdButton.onpointerleave = endGated;
+      view.holdButton.onpointercancel = endGated;
+    } else if (view.supportsMuteToggle) {
+      view.holdButton.hidden = false;
+      view.holdButton.onclick = () => this.toggleMute();
+    } else {
+      view.holdButton.hidden = true;
+    }
+
+    if (view.stopButton) {
+      view.stopButton.onclick = () => {
+        this.send({ t: "barge-in" });
+        this.setStatus("turn", "barge-in sent");
+      };
+    }
+    if (view.repeatButton) {
+      view.repeatButton.onclick = () => this.sendSay("Please repeat your previous answer.");
+    }
+    if (view.safeQuestionButtons) {
+      for (const safeButton of view.safeQuestionButtons) {
+        safeButton.onclick = () => this.sendSay(safeButton.textContent ?? "");
+      }
     }
   }
 
@@ -229,7 +241,7 @@ class ThinVoiceLiveClient {
   }
 
   private async prepareMicrophone(activeMode: string) {
-    if (!this.operator) return;
+    if (!this.interactive) return;
     try {
       this.setStatus("microphone", "requesting permission");
       this.micStream = await navigator.mediaDevices.getUserMedia({
@@ -257,13 +269,13 @@ class ThinVoiceLiveClient {
         this.setStatus("turn", "gated: hold to talk");
       }
     } catch (error) {
-      this.operator.setReady(false);
+      this.interactive.setReady(false);
       this.fail(`Microphone setup failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   private async startGatedTurn() {
-    if (!this.operator) return;
+    if (!this.interactive) return;
     if (!this.audioContext) {
       this.fail("Microphone is not ready; cannot start a gated turn.");
       return;
@@ -273,20 +285,26 @@ class ThinVoiceLiveClient {
     });
     this.send({ t: "start-turn" });
     this.streamingMic = true;
-    this.operator.setHoldActive(true);
+    this.interactive.setHoldActive(true);
     this.setStatus("turn", "recording gated turn");
   }
 
   private endGatedTurn() {
     if (!this.streamingMic) return;
     this.stopMicStreaming();
-    this.operator?.setHoldActive(false);
+    this.interactive?.setHoldActive(false);
     this.send({ t: "end-turn" });
     this.setStatus("turn", "gated turn sent");
   }
 
   private stopMicStreaming() {
     this.streamingMic = false;
+  }
+
+  private toggleMute() {
+    this.streamingMic = !this.streamingMic;
+    this.interactive?.setMuted?.(!this.streamingMic);
+    this.setStatus("microphone", this.streamingMic ? "live" : "muted");
   }
 
   private sendSay(text: string) {
@@ -300,7 +318,7 @@ class ThinVoiceLiveClient {
   }
 
   private setStatus(name: "connection" | "speech" | "avatar" | "turn" | "webrtc" | "microphone", value: string) {
-    if (this.operator) this.operator.setStatus(name, value);
+    if (this.interactive) this.interactive.setStatus(name, value);
     else if (name === "connection" || name === "webrtc" || name === "avatar") (this.view as DisplayView).setStatus(`${name}: ${value}`);
   }
 
@@ -310,12 +328,12 @@ class ThinVoiceLiveClient {
     this.pc = undefined;
     this.setStatus("avatar", "unavailable");
     this.setStatus("webrtc", "avatar disabled (capacity)");
-    if (this.operator) this.operator.noteNonFatal(`Avatar unavailable: ${message}`);
+    if (this.interactive) this.interactive.noteNonFatal(`Avatar unavailable: ${message}`);
     else (this.view as DisplayView).setStatus(`Avatar unavailable: ${message}`);
   }
 
   private fail(message: string) {
-    if (this.operator) this.operator.setError(message);
+    if (this.interactive) this.interactive.setError(message);
     else (this.view as DisplayView).setError(message);
   }
 
@@ -335,7 +353,7 @@ function boot() {
   const root = document.getElementById("app");
   if (!root) throw new Error("Missing #app root element.");
 
-  const view = viewName === "display" ? renderDisplayView(root) : renderOperatorView(root);
+  const view: InteractiveView | DisplayView = viewName === "display" ? renderDisplayView(root) : renderOperatorView(root);
   const client = new ThinVoiceLiveClient(view);
   window.addEventListener("beforeunload", () => client.dispose());
   client.start();

@@ -9,13 +9,10 @@ export type ReadyConfig = {
 
 export type StatusName = "connection" | "speech" | "avatar" | "turn" | "webrtc" | "microphone";
 
-export type OperatorView = {
+export type InteractiveView = {
   root: HTMLElement;
   avatar: HTMLVideoElement;
   holdButton: HTMLButtonElement;
-  stopButton: HTMLButtonElement;
-  repeatButton: HTMLButtonElement;
-  safeQuestionButtons: HTMLButtonElement[];
   setConfig(config: ReadyConfig): void;
   setStatus(name: StatusName, value: string): void;
   setError(message: string): void;
@@ -23,8 +20,20 @@ export type OperatorView = {
   setReady(ready: boolean): void;
   setHoldActive(active: boolean): void;
   addTranscript(role: "user" | "agent", text: string, final: boolean): void;
-  noteTool(text: string): void;
   noteNonFatal(message: string): void;
+  supportsMuteToggle?: boolean;
+  setMuted?(muted: boolean): void;
+  stopButton?: HTMLButtonElement;
+  repeatButton?: HTMLButtonElement;
+  safeQuestionButtons?: HTMLButtonElement[];
+  noteTool?(text: string): void;
+};
+
+export type OperatorView = InteractiveView & {
+  stopButton: HTMLButtonElement;
+  repeatButton: HTMLButtonElement;
+  safeQuestionButtons: HTMLButtonElement[];
+  noteTool(text: string): void;
 };
 
 export type DisplayView = {
