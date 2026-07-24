@@ -36,6 +36,11 @@ export type OperatorView = InteractiveView & {
   noteTool(text: string): void;
 };
 
+export type LandingView = InteractiveView & {
+  supportsMuteToggle: true;
+  setMuted(muted: boolean): void;
+};
+
 export type DisplayView = {
   root: HTMLElement;
   avatar: HTMLVideoElement;
@@ -63,8 +68,23 @@ function setText(element: HTMLElement, value: string) {
   element.textContent = value;
 }
 
+function createTranscriptAppender(list: HTMLElement) {
+  const liveText: Record<"user" | "agent", string> = { user: "", agent: "" };
+  return function addTranscript(role: "user" | "agent", text: string, final: boolean) {
+    const existing = list.querySelector<HTMLElement>(`.transcript-line.live.${role}`);
+    const line = existing ?? document.createElement("p");
+    const transcriptText = final ? text : liveText[role] + text;
+    liveText[role] = final ? "" : transcriptText;
+    line.className = `transcript-line ${role} ${final ? "final" : "live"}`;
+    line.textContent = `${role === "user" ? "You" : "Agent"}${final ? "" : " (live)"}: ${transcriptText}`;
+    if (!existing) list.append(line);
+    if (final) line.classList.remove("live");
+    line.scrollIntoView({ block: "nearest" });
+  };
+}
+
 export function renderOperatorView(root: HTMLElement): OperatorView {
-  document.body.classList.remove("display-view");
+  document.body.classList.remove("display-view", "landing-view");
   root.replaceChildren();
 
   const shell = document.createElement("main");
@@ -123,9 +143,9 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
   const transcriptList = document.createElement("div");
   transcriptList.className = "transcript-list";
   transcriptPanel.append(transcriptHeading, transcriptList);
+  const addTranscript = createTranscriptAppender(transcriptList);
 
   const safeQuestionButtons: HTMLButtonElement[] = [];
-  const liveText: Record<"user" | "agent", string> = { user: "", agent: "" };
 
   const toolsPanel = document.createElement("section");
   toolsPanel.className = "tools-panel";
@@ -146,19 +166,6 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
 
   shell.append(heading, error, nonFatal, avatarPanel, configPanel, statusPanel, controls, transcriptPanel, toolsPanel);
   root.append(shell);
-
-  function addTranscript(role: "user" | "agent", text: string, final: boolean) {
-    const existing = transcriptList.querySelector<HTMLElement>(`.transcript-line.live.${role}`);
-    const line = existing ?? document.createElement("p");
-    const transcriptText = final ? text : liveText[role] + text;
-    if (final) liveText[role] = "";
-    else liveText[role] = transcriptText;
-    line.className = `transcript-line ${role} ${final ? "final" : "live"}`;
-    line.textContent = `${role === "user" ? "You" : "Agent"}${final ? "" : " (live)"}: ${transcriptText}`;
-    if (!existing) transcriptList.append(line);
-    if (final) line.classList.remove("live");
-    line.scrollIntoView({ block: "nearest" });
-  }
 
   return {
     root,
@@ -221,8 +228,122 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
   };
 }
 
+export function renderLandingView(root: HTMLElement): LandingView {
+  document.body.classList.add("landing-view");
+  document.body.classList.remove("display-view");
+  root.replaceChildren();
+
+  const avatar = document.createElement("video");
+  avatar.id = "avatar";
+  avatar.className = "landing-avatar";
+  avatar.autoplay = true;
+  avatar.playsInline = true;
+
+  const pill = document.createElement("div");
+  pill.className = "landing-pill";
+  pill.hidden = true;
+
+  const gear = document.createElement("a");
+  gear.className = "landing-gear";
+  gear.href = "?view=operator";
+  gear.textContent = "⚙";
+  gear.setAttribute("aria-label", "Open troubleshoot view");
+  gear.title = "Troubleshoot";
+
+  const holdButton = document.createElement("button");
+  holdButton.type = "button";
+  holdButton.className = "landing-talk";
+  holdButton.textContent = "🎤 Hold to talk";
+  holdButton.disabled = true;
+  holdButton.hidden = true;
+
+  const transcriptToggle = document.createElement("button");
+  transcriptToggle.type = "button";
+  transcriptToggle.className = "landing-transcript-toggle";
+  transcriptToggle.textContent = "💬";
+  transcriptToggle.setAttribute("aria-label", "Toggle transcript");
+  transcriptToggle.title = "Transcript";
+
+  const panel = document.createElement("aside");
+  panel.className = "landing-transcript";
+  const panelHeader = document.createElement("header");
+  const panelTitle = document.createElement("span");
+  panelTitle.textContent = "Transcript";
+  const panelClose = document.createElement("button");
+  panelClose.type = "button";
+  panelClose.className = "landing-transcript-close";
+  panelClose.textContent = "×";
+  panelClose.setAttribute("aria-label", "Close transcript");
+  panelHeader.append(panelTitle, panelClose);
+  const transcriptList = document.createElement("div");
+  transcriptList.className = "landing-transcript-list";
+  panel.append(panelHeader, transcriptList);
+
+  const togglePanel = () => panel.classList.toggle("open");
+  transcriptToggle.onclick = togglePanel;
+  panelClose.onclick = () => panel.classList.remove("open");
+
+  const notice = document.createElement("div");
+  notice.className = "landing-notice";
+  notice.hidden = true;
+  notice.setAttribute("role", "status");
+
+  const errorOverlay = document.createElement("div");
+  errorOverlay.className = "landing-error";
+  errorOverlay.hidden = true;
+  errorOverlay.setAttribute("role", "alert");
+
+  root.append(avatar, pill, gear, holdButton, transcriptToggle, panel, notice, errorOverlay);
+
+  const addTranscript = createTranscriptAppender(transcriptList);
+
+  return {
+    root,
+    avatar,
+    holdButton,
+    supportsMuteToggle: true,
+    setConfig() {
+      // The landing screen is intentionally minimal; config drives only the talk control.
+    },
+    setStatus(name, value) {
+      if (name !== "connection" && name !== "webrtc" && name !== "avatar") return;
+      if (name === "webrtc" && value === "connected") {
+        pill.hidden = true;
+        return;
+      }
+      pill.hidden = false;
+      pill.textContent = value;
+    },
+    setError(message) {
+      errorOverlay.hidden = false;
+      errorOverlay.textContent = message;
+    },
+    clearError() {
+      errorOverlay.hidden = true;
+      errorOverlay.textContent = "";
+    },
+    setReady(ready) {
+      holdButton.disabled = !ready;
+    },
+    setHoldActive(active) {
+      holdButton.classList.toggle("active", active);
+      holdButton.textContent = active ? "🎤 Release to end turn" : "🎤 Hold to talk";
+    },
+    setMuted(muted) {
+      holdButton.classList.toggle("muted", muted);
+      holdButton.textContent = muted ? "🔇 Muted — tap to unmute" : "🎤 Listening — tap to mute";
+    },
+    addTranscript,
+    noteNonFatal(message) {
+      notice.hidden = false;
+      notice.textContent = message;
+    },
+  };
+}
+
 export function renderDisplayView(root: HTMLElement): DisplayView {
   document.body.classList.add("display-view");
+  document.body.classList.remove("landing-view");
   root.replaceChildren();
 
   const video = document.createElement("video");

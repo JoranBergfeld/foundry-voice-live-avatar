@@ -1,4 +1,4 @@
-import { renderDisplayView, renderOperatorView, type DisplayView, type InteractiveView, type OperatorView, type ReadyConfig } from "./views";
+import { renderDisplayView, renderLandingView, renderOperatorView, type DisplayView, type InteractiveView, type OperatorView, type ReadyConfig } from "./views";
 
 type IceServerFrame = { urls: string[]; username?: string; credential?: string };
 type ReadyFrame = { t: "ready"; config: ReadyConfig; iceServers: IceServerFrame[] };
@@ -349,11 +349,14 @@ class ThinVoiceLiveClient {
 }
 
 function boot() {
-  const viewName = new URLSearchParams(location.search).get("view") ?? "operator";
+  const viewName = new URLSearchParams(location.search).get("view") ?? "landing";
   const root = document.getElementById("app");
   if (!root) throw new Error("Missing #app root element.");
 
-  const view: InteractiveView | DisplayView = viewName === "display" ? renderDisplayView(root) : renderOperatorView(root);
+  const view: InteractiveView | DisplayView =
+    viewName === "operator" ? renderOperatorView(root)
+    : viewName === "display" ? renderDisplayView(root)
+    : renderLandingView(root);
   const client = new ThinVoiceLiveClient(view);
   window.addEventListener("beforeunload", () => client.dispose());
   client.start();
