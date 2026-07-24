@@ -317,17 +317,31 @@ public sealed class VoiceLiveWebSocketBridge(
         await CloseIfOpenAsync(socket, WebSocketCloseStatus.InternalServerError, "Voice Live session failed", ct);
     }
 
-    private static async Task CloseIfOpenAsync(WebSocket socket, WebSocketCloseStatus status, string description, CancellationToken ct)
+    private async Task CloseIfOpenAsync(WebSocket socket, WebSocketCloseStatus status, string description, CancellationToken ct)
     {
-        if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+        if (socket.State is not (WebSocketState.Open or WebSocketState.CloseReceived))
+            return;
+
+        try
         {
-            try
-            {
+            await _sendLock.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        try
+        {
+            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
                 await socket.CloseAsync(status, description, ct);
-            }
-            catch (Exception ex) when (ex is WebSocketException or OperationCanceledException)
-            {
-            }
+        }
+        catch (Exception ex) when (ex is WebSocketException or OperationCanceledException or InvalidOperationException)
+        {
+        }
+        finally
+        {
+            _sendLock.Release();
         }
     }
 

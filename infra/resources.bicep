@@ -78,6 +78,7 @@ resource site 'Microsoft.Web/sites@2024-11-01' = {
       appSettings: [
         { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appi.properties.ConnectionString }
         { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
+        { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
         { name: 'ConfigDir', value: 'config' }
         { name: 'VoiceLive__ConfigDir', value: 'config' }
         { name: 'VoiceLive__Endpoint', value: ai.properties.endpoint }
