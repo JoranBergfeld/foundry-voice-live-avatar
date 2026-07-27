@@ -191,6 +191,12 @@ class ThinVoiceLiveClient {
     if (!view) return;
     const gated = config.activeMode === "gated";
 
+    view.holdButton.onclick = null;
+    view.holdButton.onpointerdown = null;
+    view.holdButton.onpointerup = null;
+    view.holdButton.onpointerleave = null;
+    view.holdButton.onpointercancel = null;
+
     if (gated) {
       view.holdButton.hidden = false;
       view.holdButton.onpointerdown = (event) => {
@@ -335,13 +341,19 @@ class ThinVoiceLiveClient {
 
   private async startGatedTurn() {
     if (!this.interactive) return;
-    if (!this.audioContext) {
+    const token = this.sessionToken;
+    const audioContext = this.audioContext;
+    if (!audioContext) {
       this.fail("Microphone is not ready; cannot start a gated turn.");
       return;
     }
-    await this.audioContext.resume().catch((error: unknown) => {
+    try {
+      await audioContext.resume();
+    } catch (error) {
       this.fail(`Could not resume microphone capture: ${error instanceof Error ? error.message : String(error)}`);
-    });
+      return;
+    }
+    if (!this.isCurrentSession(token) || this.audioContext !== audioContext) return;
     this.send({ t: "start-turn" });
     this.streamingMic = true;
     this.interactive.setHoldActive(true);
