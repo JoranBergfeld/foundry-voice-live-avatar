@@ -63,28 +63,61 @@ class ThinVoiceLiveClient {
   private streamingMic = false;
   private readyConfig: ReadyConfig | undefined;
   private pingId = 0;
+  private sessionToken = 0;
+  private disconnected = true;
+  private disconnectPromise: Promise<void> | undefined;
 
   constructor(view: InteractiveView | DisplayView) {
     this.view = view;
     this.interactive = isInteractiveView(view) ? view : undefined;
+    this.interactive?.setReconnectHandler(() => this.start());
   }
 
   start() {
+    if (this.socket || this.disconnectPromise) return;
+    this.disconnected = false;
+    const token = ++this.sessionToken;
+    this.interactive?.setDisconnected(false);
+    this.interactive?.setReady(false);
+    this.interactive?.clearError();
     this.setStatus("connection", "connecting");
-    this.socket = new WebSocket(wsUrl);
-    this.socket.binaryType = "arraybuffer";
-    this.socket.addEventListener("open", () => this.setStatus("connection", "connected; waiting for ready"));
-    this.socket.addEventListener("message", (event) => void this.onMessage(event));
-    this.socket.addEventListener("error", () => this.fail("WebSocket failed. Check that the ASP.NET app is running and /ws/session is available."));
-    this.socket.addEventListener("close", (event) => {
-      this.stopMicStreaming();
-      this.setStatus("connection", `closed${event.code ? ` (${event.code})` : ""}`);
-      if (!event.wasClean) this.fail("WebSocket closed unexpectedly; the server-side Voice Live session ended.");
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(wsUrl);
+    } catch (error) {
+      void this.disconnect(`WebSocket setup failed: ${error instanceof Error ? error.message : String(error)}`, token);
+      return;
+    }
+    this.socket = socket;
+    socket.binaryType = "arraybuffer";
+    socket.addEventListener("open", () => {
+      if (this.isCurrentSession(token, socket)) this.setStatus("connection", "connected; waiting for ready");
     });
-    this.pingId = window.setInterval(() => this.send({ t: "ping" }), 25_000);
+    socket.addEventListener("message", (event) => {
+      if (this.isCurrentSession(token, socket)) void this.onMessage(event, token);
+    });
+    socket.addEventListener("error", () => {
+      if (!this.isCurrentSession(token, socket)) return;
+      void this.disconnect("WebSocket failed. Check that the ASP.NET app is running and /ws/session is available.", token);
+    });
+    socket.addEventListener("close", (event) => {
+      if (!this.isCurrentSession(token, socket)) return;
+      const message = event.wasClean
+        ? undefined
+        : "WebSocket closed unexpectedly; the server-side Voice Live session ended.";
+      void this.disconnect(message, token);
+    });
+    this.pingId = window.setInterval(() => {
+      if (this.isCurrentSession(token, socket)) this.send({ t: "ping" });
+    }, 25_000);
   }
 
-  private async onMessage(event: MessageEvent) {
+  private isCurrentSession(token: number, socket?: WebSocket) {
+    return token === this.sessionToken && (!socket || this.socket === socket);
+  }
+
+  private async onMessage(event: MessageEvent, token: number) {
+    if (!this.isCurrentSession(token)) return;
     if (typeof event.data !== "string") return;
     let frame: ServerFrame;
     try {
@@ -96,10 +129,10 @@ class ThinVoiceLiveClient {
 
     switch (frame.t) {
       case "ready":
-        await this.onReady(frame);
+        await this.onReady(frame, token);
         break;
       case "avatar-answer":
-        await this.onAvatarAnswer(frame.sdp);
+        await this.onAvatarAnswer(frame.sdp, token);
         break;
       case "user-transcript":
       case "agent-transcript":
@@ -135,7 +168,8 @@ class ThinVoiceLiveClient {
     }
   }
 
-  private async onReady(frame: ReadyFrame) {
+  private async onReady(frame: ReadyFrame, token: number) {
+    if (!this.isCurrentSession(token)) return;
     this.readyConfig = frame.config;
     if (this.interactive) {
       this.interactive.clearError();
@@ -147,8 +181,9 @@ class ThinVoiceLiveClient {
     }
     this.setStatus("connection", "ready");
 
-    await this.negotiateAvatar(frame.iceServers);
-    if (this.interactive) await this.prepareMicrophone(frame.config.activeMode);
+    await this.negotiateAvatar(frame.iceServers, token);
+    if (!this.isCurrentSession(token)) return;
+    if (this.interactive) await this.prepareMicrophone(frame.config.activeMode, token);
   }
 
   private wireInteractiveControls(config: ReadyConfig) {
@@ -189,19 +224,25 @@ class ThinVoiceLiveClient {
     }
   }
 
-  private async negotiateAvatar(iceServers: IceServerFrame[]) {
+  private async negotiateAvatar(iceServers: IceServerFrame[], token: number) {
     this.setStatus("webrtc", "creating peer connection");
     try {
-      this.pc = new RTCPeerConnection({
+      const pc = new RTCPeerConnection({
         iceServers: iceServers.map((server) => ({
           urls: server.urls,
           username: server.username,
           credential: server.credential,
         })),
       });
-      this.pc.addTransceiver("video", { direction: "recvonly" });
-      this.pc.addTransceiver("audio", { direction: "recvonly" });
-      this.pc.ontrack = (event) => {
+      if (!this.isCurrentSession(token)) {
+        pc.close();
+        return;
+      }
+      this.pc = pc;
+      pc.addTransceiver("video", { direction: "recvonly" });
+      pc.addTransceiver("audio", { direction: "recvonly" });
+      pc.ontrack = (event) => {
+        if (!this.isCurrentSession(token) || this.pc !== pc) return;
         const [stream] = event.streams;
         if (!stream) return;
         // Bundled avatar video+audio arrive as separate track events on the same stream; attach once.
@@ -210,59 +251,77 @@ class ThinVoiceLiveClient {
         this.view.avatar.play().catch((error: unknown) => {
           // AbortError means a newer load interrupted play(); media can still be flowing.
           if (error instanceof DOMException && error.name === "AbortError") return;
-          this.fail(`Browser blocked avatar playback: ${error instanceof Error ? error.message : String(error)}. Interact with the page and retry if needed.`);
+          void this.disconnect(
+            `Browser blocked avatar playback: ${error instanceof Error ? error.message : String(error)}. Interact with the page and retry if needed.`,
+            token,
+          );
         });
       };
-      this.pc.onconnectionstatechange = () => this.setStatus("webrtc", this.pc?.connectionState ?? "unknown");
+      pc.onconnectionstatechange = () => {
+        if (this.isCurrentSession(token) && this.pc === pc) this.setStatus("webrtc", pc.connectionState);
+      };
 
-      const offer = await this.pc.createOffer();
-      await this.pc.setLocalDescription(offer);
-      await waitForIceGatheringComplete(this.pc);
-      const sdp = this.pc.localDescription?.sdp;
+      const offer = await pc.createOffer();
+      if (!this.isCurrentSession(token) || this.pc !== pc) return;
+      await pc.setLocalDescription(offer);
+      await waitForIceGatheringComplete(pc);
+      if (!this.isCurrentSession(token) || this.pc !== pc) return;
+      const sdp = pc.localDescription?.sdp;
       if (!sdp) throw new Error("browser did not create a local SDP offer");
       this.send({ t: "avatar-offer", sdp });
       this.setStatus("webrtc", "offer sent; waiting for answer");
     } catch (error) {
-      this.fail(`Avatar WebRTC negotiation failed: ${error instanceof Error ? error.message : String(error)}`);
+      await this.disconnect(`Avatar WebRTC negotiation failed: ${error instanceof Error ? error.message : String(error)}`, token);
     }
   }
 
-  private async onAvatarAnswer(sdp: string) {
+  private async onAvatarAnswer(sdp: string, token: number) {
+    if (!this.isCurrentSession(token)) return;
     if (!this.pc) {
-      this.fail("Received avatar SDP answer before the browser peer connection existed.");
+      await this.disconnect("Received avatar SDP answer before the browser peer connection existed.", token);
       return;
     }
+    const pc = this.pc;
     try {
-      await this.pc.setRemoteDescription({ type: "answer", sdp });
+      await pc.setRemoteDescription({ type: "answer", sdp });
+      if (!this.isCurrentSession(token) || this.pc !== pc) return;
       this.setStatus("webrtc", "answer applied");
     } catch (error) {
-      this.fail(`Browser rejected avatar SDP answer: ${error instanceof Error ? error.message : String(error)}`);
+      await this.disconnect(`Browser rejected avatar SDP answer: ${error instanceof Error ? error.message : String(error)}`, token);
     }
   }
 
-  private async prepareMicrophone(activeMode: string) {
+  private async prepareMicrophone(activeMode: string, token: number) {
     if (!this.interactive) return;
     try {
       this.setStatus("microphone", "requesting permission");
-      this.micStream = await navigator.mediaDevices.getUserMedia({
+      const micStream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
-      this.audioContext = new AudioContext({ sampleRate: 24_000 });
-      await this.audioContext.audioWorklet.addModule("/pcm-worklet.js");
+      if (!this.isCurrentSession(token)) {
+        micStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      this.micStream = micStream;
+      const audioContext = new AudioContext({ sampleRate: 24_000 });
+      this.audioContext = audioContext;
+      await audioContext.audioWorklet.addModule("/pcm-worklet.js");
+      if (!this.isCurrentSession(token) || this.audioContext !== audioContext) return;
 
-      const source = this.audioContext.createMediaStreamSource(this.micStream);
-      const worklet = new AudioWorkletNode(this.audioContext, "pcm16-worklet");
-      const silentOutput = this.audioContext.createGain();
+      const source = audioContext.createMediaStreamSource(micStream);
+      const worklet = new AudioWorkletNode(audioContext, "pcm16-worklet");
+      const silentOutput = audioContext.createGain();
       silentOutput.gain.value = 0;
       worklet.port.onmessage = (event: MessageEvent<ArrayBuffer>) => {
-        if (this.streamingMic && this.socket?.readyState === WebSocket.OPEN) this.socket.send(event.data);
+        if (this.isCurrentSession(token) && this.streamingMic && this.socket?.readyState === WebSocket.OPEN) this.socket.send(event.data);
       };
-      source.connect(worklet).connect(silentOutput).connect(this.audioContext.destination);
+      source.connect(worklet).connect(silentOutput).connect(audioContext.destination);
       this.audioNodes = [source, worklet, silentOutput];
-      this.setStatus("microphone", `ready (${Math.round(this.audioContext.sampleRate)} Hz context)`);
+      this.setStatus("microphone", `ready (${Math.round(audioContext.sampleRate)} Hz context)`);
 
       if (activeMode === "open-mic" || activeMode === "hybrid") {
-        await this.audioContext.resume();
+        await audioContext.resume();
+        if (!this.isCurrentSession(token) || this.audioContext !== audioContext) return;
         this.streamingMic = true;
         this.interactive?.setMuted?.(false);
         this.setStatus("turn", `${activeMode}: streaming continuously`);
@@ -270,8 +329,7 @@ class ThinVoiceLiveClient {
         this.setStatus("turn", "gated: hold to talk");
       }
     } catch (error) {
-      this.interactive.setReady(false);
-      this.fail(`Microphone setup failed: ${error instanceof Error ? error.message : String(error)}`);
+      await this.disconnect(`Microphone setup failed: ${error instanceof Error ? error.message : String(error)}`, token);
     }
   }
 
@@ -338,14 +396,92 @@ class ThinVoiceLiveClient {
     else (this.view as DisplayView).setError(message);
   }
 
+  private async disconnect(message?: string, token?: number) {
+    if (token !== undefined && token !== this.sessionToken) return;
+    if (this.disconnectPromise) {
+      await this.disconnectPromise;
+      return;
+    }
+    if (this.disconnected) return;
+
+    this.disconnected = true;
+    ++this.sessionToken;
+    this.interactive?.setReady(false);
+    this.interactive?.setHoldActive(false);
+
+    const cleanup = (async () => {
+      if (this.pingId) {
+        window.clearInterval(this.pingId);
+        this.pingId = 0;
+      }
+
+      this.stopMicStreaming();
+      const micStream = this.micStream;
+      this.micStream = undefined;
+      micStream?.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {
+          // Continue tearing down any remaining browser resources.
+        }
+      });
+
+      const audioNodes = this.audioNodes;
+      this.audioNodes = [];
+      for (const node of audioNodes) {
+        try {
+          node.disconnect();
+        } catch {
+          // Continue tearing down any remaining browser resources.
+        }
+      }
+
+      const audioContext = this.audioContext;
+      this.audioContext = undefined;
+
+      const pc = this.pc;
+      this.pc = undefined;
+      try {
+        pc?.close();
+      } catch {
+        // Continue tearing down any remaining browser resources.
+      }
+      this.view.avatar.srcObject = null;
+
+      const socket = this.socket;
+      this.socket = undefined;
+      if (socket && socket.readyState < WebSocket.CLOSING) {
+        try {
+          socket.close();
+        } catch {
+          // Continue tearing down any remaining browser resources.
+        }
+      }
+
+      this.readyConfig = undefined;
+      if (audioContext && audioContext.state !== "closed") {
+        try {
+          await audioContext.close();
+        } catch {
+          // A failed close must not prevent the rest of the session teardown.
+        }
+      }
+
+      this.setStatus("connection", "disconnected");
+      if (message) this.fail(message);
+      this.interactive?.setDisconnected(true);
+    })();
+
+    this.disconnectPromise = cleanup;
+    try {
+      await cleanup;
+    } finally {
+      if (this.disconnectPromise === cleanup) this.disconnectPromise = undefined;
+    }
+  }
+
   dispose() {
-    if (this.pingId) window.clearInterval(this.pingId);
-    this.stopMicStreaming();
-    this.micStream?.getTracks().forEach((track) => track.stop());
-    for (const node of this.audioNodes) node.disconnect();
-    void this.audioContext?.close();
-    this.pc?.close();
-    this.socket?.close();
+    void this.disconnect();
   }
 }
 

@@ -18,6 +18,8 @@ export type InteractiveView = {
   setError(message: string): void;
   clearError(): void;
   setReady(ready: boolean): void;
+  setReconnectHandler(handler: () => void): void;
+  setDisconnected(disconnected: boolean): void;
   setHoldActive(active: boolean): void;
   addTranscript(role: "user" | "agent", text: string, final: boolean): void;
   noteNonFatal(message: string): void;
@@ -98,6 +100,12 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
   error.hidden = true;
   error.setAttribute("role", "alert");
 
+  const reconnectButton = document.createElement("button");
+  reconnectButton.type = "button";
+  reconnectButton.className = "reconnect-button";
+  reconnectButton.textContent = "Reconnect";
+  reconnectButton.hidden = true;
+
   const avatarPanel = document.createElement("section");
   avatarPanel.className = "avatar-panel";
   const avatar = document.createElement("video");
@@ -164,7 +172,7 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
   nonFatal.hidden = true;
   nonFatal.setAttribute("role", "status");
 
-  shell.append(heading, error, nonFatal, avatarPanel, configPanel, statusPanel, controls, transcriptPanel, toolsPanel);
+  shell.append(heading, error, reconnectButton, nonFatal, avatarPanel, configPanel, statusPanel, controls, transcriptPanel, toolsPanel);
   root.append(shell);
 
   return {
@@ -205,6 +213,16 @@ export function renderOperatorView(root: HTMLElement): OperatorView {
       stopButton.disabled = !ready;
       repeatButton.disabled = !ready;
       for (const safeButton of safeQuestionButtons) safeButton.disabled = !ready;
+    },
+    setReconnectHandler(handler) {
+      reconnectButton.onclick = handler;
+    },
+    setDisconnected(disconnected) {
+      reconnectButton.hidden = !disconnected;
+      holdButton.disabled = disconnected;
+      stopButton.disabled = disconnected;
+      repeatButton.disabled = disconnected;
+      for (const safeButton of safeQuestionButtons) safeButton.disabled = disconnected;
     },
     setHoldActive(active) {
       holdButton.classList.toggle("active", active);
@@ -293,7 +311,13 @@ export function renderLandingView(root: HTMLElement): LandingView {
   errorOverlay.hidden = true;
   errorOverlay.setAttribute("role", "alert");
 
-  root.append(avatar, pill, gear, holdButton, transcriptToggle, panel, notice, errorOverlay);
+  const reconnectButton = document.createElement("button");
+  reconnectButton.type = "button";
+  reconnectButton.className = "reconnect-button landing-reconnect";
+  reconnectButton.textContent = "Reconnect";
+  reconnectButton.hidden = true;
+
+  root.append(avatar, pill, gear, holdButton, transcriptToggle, panel, notice, errorOverlay, reconnectButton);
 
   const addTranscript = createTranscriptAppender(transcriptList);
 
@@ -327,6 +351,13 @@ export function renderLandingView(root: HTMLElement): LandingView {
     },
     setReady(ready) {
       holdButton.disabled = !ready;
+    },
+    setReconnectHandler(handler) {
+      reconnectButton.onclick = handler;
+    },
+    setDisconnected(disconnected) {
+      reconnectButton.hidden = !disconnected;
+      holdButton.disabled = disconnected;
     },
     setHoldActive(active) {
       holdButton.classList.toggle("active", active);

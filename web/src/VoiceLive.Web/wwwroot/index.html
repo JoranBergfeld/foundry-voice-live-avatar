@@ -94,6 +94,22 @@
         background: #b42318;
       }
 
+      .reconnect-button {
+        background: #2563eb;
+        color: #fff;
+        padding: 0.7rem 1rem;
+        cursor: pointer;
+      }
+
+      .reconnect-button[hidden] {
+        display: none;
+      }
+
+      .operator-shell .reconnect-button {
+        grid-column: 1 / -1;
+        justify-self: start;
+      }
+
       .error-banner,
       .display-status.error {
         background: #fef3f2;
@@ -187,6 +203,16 @@
 
       .landing-talk.muted {
         background: #6b7280;
+      }
+
+      .landing-reconnect {
+        position: fixed;
+        bottom: 1.5rem;
+        left: 50%;
+        z-index: 1;
+        transform: translateX(-50%);
+        border-radius: 999px;
+        box-shadow: 0 0.3rem 1rem rgb(0 0 0 / 40%);
       }
 
       .landing-transcript-toggle {
