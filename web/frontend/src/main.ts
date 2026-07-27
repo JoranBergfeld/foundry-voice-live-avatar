@@ -61,6 +61,7 @@ class ThinVoiceLiveClient {
   private audioNodes: AudioNode[] = [];
   private micStream: MediaStream | undefined;
   private streamingMic = false;
+  private gatedHoldIntent: { token: number; audioContext: AudioContext } | undefined;
   private readyConfig: ReadyConfig | undefined;
   private pingId = 0;
   private sessionToken = 0;
@@ -190,6 +191,7 @@ class ThinVoiceLiveClient {
     const view = this.interactive;
     if (!view) return;
     const gated = config.activeMode === "gated";
+    this.gatedHoldIntent = undefined;
 
     view.holdButton.onclick = null;
     view.holdButton.onpointerdown = null;
@@ -347,14 +349,25 @@ class ThinVoiceLiveClient {
       this.fail("Microphone is not ready; cannot start a gated turn.");
       return;
     }
+    const holdIntent = { token, audioContext };
+    this.gatedHoldIntent = holdIntent;
     try {
       await audioContext.resume();
     } catch (error) {
-      if (!this.isCurrentSession(token) || this.audioContext !== audioContext) return;
+      if (
+        !this.isCurrentSession(token) ||
+        this.audioContext !== audioContext ||
+        this.gatedHoldIntent !== holdIntent
+      ) return;
+      this.gatedHoldIntent = undefined;
       this.fail(`Could not resume microphone capture: ${error instanceof Error ? error.message : String(error)}`);
       return;
     }
-    if (!this.isCurrentSession(token) || this.audioContext !== audioContext) return;
+    if (
+      !this.isCurrentSession(token) ||
+      this.audioContext !== audioContext ||
+      this.gatedHoldIntent !== holdIntent
+    ) return;
     this.send({ t: "start-turn" });
     this.streamingMic = true;
     this.interactive.setHoldActive(true);
@@ -362,6 +375,7 @@ class ThinVoiceLiveClient {
   }
 
   private endGatedTurn() {
+    this.gatedHoldIntent = undefined;
     if (!this.streamingMic) return;
     this.stopMicStreaming();
     this.interactive?.setHoldActive(false);
@@ -419,6 +433,7 @@ class ThinVoiceLiveClient {
 
     this.disconnected = true;
     ++this.sessionToken;
+    this.gatedHoldIntent = undefined;
     this.interactive?.setReady(false);
     this.interactive?.setHoldActive(false);
 
