@@ -12,3 +12,4 @@ web/src/VoiceLive.Web/wwwroot/app.js.map
 
 # Superpowers brainstorming companion
 .superpowers/
+.worktrees/
