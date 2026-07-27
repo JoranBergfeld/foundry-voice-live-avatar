@@ -350,6 +350,7 @@ class ThinVoiceLiveClient {
     try {
       await audioContext.resume();
     } catch (error) {
+      if (!this.isCurrentSession(token) || this.audioContext !== audioContext) return;
       this.fail(`Could not resume microphone capture: ${error instanceof Error ? error.message : String(error)}`);
       return;
     }
