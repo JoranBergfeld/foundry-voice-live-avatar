@@ -9,6 +9,17 @@ public class ServerSessionConfigTests
     private static VoiceLiveOptions ModelOpts() => new() { Endpoint = "https://x", Mode = "model", ApiVersion = "2025-10-01" };
 
     [Fact]
+    public void Turn_mode_schema_contains_only_supported_properties()
+    {
+        var properties = typeof(ServerTurnModeConfig)
+            .GetProperties()
+            .Select(property => property.Name)
+            .OrderBy(name => name);
+
+        Assert.Equal(["ManualTurn", "TurnDetection"], properties);
+    }
+
+    [Fact]
     public void LoadServerSession_returns_endpoint_and_active_turn_mode()
     {
         var config = AppConfigLoader.Load(RepoConfigDir, ModelOpts()).Server;

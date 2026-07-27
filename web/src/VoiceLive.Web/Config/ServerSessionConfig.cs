@@ -32,8 +32,6 @@ public sealed record ServerTurnDetectionConfig(
 
 public sealed record ServerTurnModeConfig(
     bool ManualTurn = false,
-    bool? GateGatesBargeIn = null,
-    bool? InterruptResponse = null,
     ServerTurnDetectionConfig? TurnDetection = null);
 
 public sealed record ServerTurnTakingConfig(string ActiveMode, IReadOnlyDictionary<string, ServerTurnModeConfig> Modes)

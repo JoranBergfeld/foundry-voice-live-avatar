@@ -51,12 +51,10 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 | `modes.open-mic.turnDetection.endOfUtteranceDetection.model` | string | Required | Default: `semantic_detection_v1` | End-of-utterance model. |
 | `modes.open-mic.turnDetection.endOfUtteranceDetection.thresholdLevel` | string | Required | Default: `medium` | End-of-utterance threshold level. |
 | `modes.open-mic.turnDetection.endOfUtteranceDetection.timeoutMs` | number | Required | Default: `1000` | End-of-utterance timeout in milliseconds. |
-| `modes.gated` | object | Required | Contains `manualTurn`, `interruptResponse` | Gated mode definition. |
+| `modes.gated` | object | Required | Contains `manualTurn` | Gated mode definition. |
 | `modes.gated.manualTurn` | boolean | Required | Default: `true` | Whether turns are manually committed. |
-| `modes.gated.interruptResponse` | boolean | Required | Default: `false` | Whether input interrupts the avatar response. |
-| `modes.hybrid` | object | Required | Contains `manualTurn`, `gateGatesBargeIn`, `turnDetection` | Hybrid mode definition. |
+| `modes.hybrid` | object | Required | Contains `manualTurn`, `turnDetection` | Hybrid mode definition. |
 | `modes.hybrid.manualTurn` | boolean | Required | Default: `false` | Whether turns are manually committed. |
-| `modes.hybrid.gateGatesBargeIn` | boolean | Required | Default: `true` | Whether the gate controls barge-in behavior. |
 | `modes.hybrid.turnDetection` | object | Required | Contains semantic VAD settings | Automatic turn detection settings for hybrid mode. |
 | `modes.hybrid.turnDetection.type` | string | Required | Default: `azure_semantic_vad` | VAD implementation. |
 | `modes.hybrid.turnDetection.threshold` | number | Required | Default: `0.5` | VAD confidence threshold. |
