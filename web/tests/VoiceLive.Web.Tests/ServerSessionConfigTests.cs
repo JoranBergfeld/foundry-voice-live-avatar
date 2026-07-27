@@ -1,4 +1,6 @@
 using Azure.AI.VoiceLive;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using VoiceLive.Web.Config;
 using VoiceLive.Web.Session;
 using Xunit;
@@ -102,6 +104,53 @@ public class ServerSessionConfigTests
         Assert.Equal("agent", config.Server.Mode);
     }
 
+    [Theory]
+    [InlineData("session.json", "inputAudioTranscription.model", "\"\"", "session.json: inputAudioTranscription.model: is required")]
+    [InlineData("session.json", "inputAudioNoiseReduction.type", "\"unknown\"", "session.json: inputAudioNoiseReduction.type: 'unknown' is not supported")]
+    [InlineData("session.json", "inputAudioEchoCancellation.type", "\"unknown\"", "session.json: inputAudioEchoCancellation.type: 'unknown' is not supported")]
+    [InlineData("turntaking.json", "modes.open-mic.turnDetection.type", "\"unknown\"", "turntaking.json: modes.open-mic.turnDetection.type: 'unknown' is not supported")]
+    [InlineData("turntaking.json", "modes.open-mic.turnDetection.threshold", "1.1", "turntaking.json: modes.open-mic.turnDetection.threshold: must be between 0 and 1")]
+    [InlineData("turntaking.json", "modes.open-mic.turnDetection.prefixPaddingMs", "-1", "turntaking.json: modes.open-mic.turnDetection.prefixPaddingMs: must be non-negative")]
+    [InlineData("turntaking.json", "modes.open-mic.turnDetection.silenceDurationMs", "-1", "turntaking.json: modes.open-mic.turnDetection.silenceDurationMs: must be non-negative")]
+    [InlineData("turntaking.json", "modes.open-mic.turnDetection.endOfUtteranceDetection.model", "\"unknown\"", "turntaking.json: modes.open-mic.turnDetection.endOfUtteranceDetection.model: 'unknown' is not supported")]
+    [InlineData("turntaking.json", "modes.open-mic.turnDetection.endOfUtteranceDetection.thresholdLevel", "\"extreme\"", "turntaking.json: modes.open-mic.turnDetection.endOfUtteranceDetection.thresholdLevel: 'extreme' is not supported")]
+    [InlineData("turntaking.json", "modes.open-mic.turnDetection.endOfUtteranceDetection.timeoutMs", "0", "turntaking.json: modes.open-mic.turnDetection.endOfUtteranceDetection.timeoutMs: must be positive")]
+    [InlineData("avatar.json", "video.resolution.width", "0", "avatar.json: video.resolution.width: must be positive")]
+    [InlineData("avatar.json", "video.resolution.height", "-1", "avatar.json: video.resolution.height: must be positive")]
+    [InlineData("avatar.json", "video.bitrate", "0", "avatar.json: video.bitrate: must be positive")]
+    [InlineData("avatar.json", "video.codec", "\"vp9\"", "avatar.json: video.codec: 'vp9' is not supported")]
+    public void AppConfigLoader_rejects_nested_values_that_cannot_reach_the_sdk(
+        string file,
+        string field,
+        string jsonValue,
+        string expectedError)
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue(file, field, jsonValue);
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains(expectedError, ex.Message);
+    }
+
+    [Theory]
+    [InlineData("modes.gated.turnDetection", "{\"type\":\"server_vad\"}", "turntaking.json: modes.gated: manualTurn cannot be combined with turnDetection")]
+    [InlineData("modes.open-mic.turnDetection", "null", "turntaking.json: modes.open-mic.turnDetection: is required when manualTurn is false")]
+    public void AppConfigLoader_rejects_invalid_turn_mode_combinations(
+        string field,
+        string jsonValue,
+        string expectedError)
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("turntaking.json", field, jsonValue);
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains(expectedError, ex.Message);
+    }
+
     [Fact]
     public void BuildForAgent_omits_model_and_instructions_but_keeps_voice_avatar_and_audio()
     {
@@ -120,5 +169,62 @@ public class ServerSessionConfigTests
         Assert.Equal("casual-sitting", options.Avatar.Style);
         Assert.Contains(options.Modalities, m => m.Equals(InteractionModality.Text));
         Assert.Contains(options.Modalities, m => m.Equals(InteractionModality.Audio));
+    }
+
+    private sealed class TemporaryConfig : IDisposable
+    {
+        private TemporaryConfig(string directory) => Directory = directory;
+
+        public string Directory { get; }
+
+        public static TemporaryConfig CopyOf(string source)
+        {
+            var destination = Path.Combine(
+                Path.GetDirectoryName(source)!,
+                $".test-config-{Guid.NewGuid():N}");
+            CopyDirectory(source, destination);
+
+            return new TemporaryConfig(destination);
+        }
+
+        public void SetJsonValue(string file, string field, string jsonValue)
+        {
+            var path = Path.Combine(Directory, file);
+            var root = JsonNode.Parse(
+                File.ReadAllText(path),
+                nodeOptions: null,
+                documentOptions: new JsonDocumentOptions
+                {
+                    CommentHandling = JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true
+                })!.AsObject();
+
+            var segments = field.Split('.');
+            JsonObject current = root;
+            foreach (var segment in segments[..^1])
+                current = current[segment]!.AsObject();
+
+            current[segments[^1]] = JsonNode.Parse(jsonValue);
+            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        }
+
+        public void Dispose()
+        {
+            if (System.IO.Directory.Exists(Directory))
+                System.IO.Directory.Delete(Directory, recursive: true);
+        }
+
+        private static void CopyDirectory(string source, string destination)
+        {
+            System.IO.Directory.CreateDirectory(destination);
+
+            foreach (var sourceFile in System.IO.Directory.EnumerateFiles(source))
+                File.Copy(sourceFile, Path.Combine(destination, Path.GetFileName(sourceFile)));
+
+            foreach (var sourceDirectory in System.IO.Directory.EnumerateDirectories(source))
+                CopyDirectory(
+                    sourceDirectory,
+                    Path.Combine(destination, Path.GetFileName(sourceDirectory)));
+        }
     }
 }
