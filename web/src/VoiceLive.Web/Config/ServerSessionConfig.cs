@@ -13,7 +13,6 @@ public sealed record ServerSessionConfig(
     string ApiVersion,
     string Model,
     ServerVoiceConfig Voice,
-    int InputAudioSamplingRate,
     ServerNoiseReductionConfig? InputAudioNoiseReduction,
     ServerEchoCancellationConfig? InputAudioEchoCancellation,
     ServerTranscriptionConfig? InputAudioTranscription,
@@ -86,9 +85,6 @@ public static partial class WebConfigLoader
                 errors.Add($"session.json: voice.type: '{session.Voice.Type}' is not one of {string.Join(", ", VoiceTypes)}");
         }
 
-        if (session.InputAudioSamplingRate <= 0)
-            errors.Add("session.json: inputAudioSamplingRate: must be greater than zero");
-
         RequireServer(turn.ActiveMode, "turntaking.json", "activeMode", errors);
         if (turn.Modes is null || turn.Modes.Count == 0)
             errors.Add("turntaking.json: modes: is required");
@@ -112,7 +108,6 @@ public static partial class WebConfigLoader
             env.ApiVersion,
             model,
             new ServerVoiceConfig(session.Voice!.Type!, session.Voice.Name!, session.Voice.Temperature, session.Voice.Rate, session.Voice.Style),
-            session.InputAudioSamplingRate,
             session.InputAudioNoiseReduction is null ? null : new ServerNoiseReductionConfig(session.InputAudioNoiseReduction.Type!),
             session.InputAudioEchoCancellation is null ? null : new ServerEchoCancellationConfig(session.InputAudioEchoCancellation.Type!),
             session.InputAudioTranscription is null ? null : new ServerTranscriptionConfig(session.InputAudioTranscription.Model!, session.InputAudioTranscription.Language),
@@ -198,7 +193,6 @@ public static partial class WebConfigLoader
         string? Region,
         string? Model,
         ServerVoiceFile? Voice,
-        int InputAudioSamplingRate,
         ServerNoiseReductionFile? InputAudioNoiseReduction,
         ServerEchoCancellationFile? InputAudioEchoCancellation,
         ServerTranscriptionFile? InputAudioTranscription);

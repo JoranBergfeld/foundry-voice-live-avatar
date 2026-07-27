@@ -5,6 +5,8 @@ namespace VoiceLive.Web.Session;
 
 public static class SessionOptionsBuilder
 {
+    public const int BrowserPcmSamplingRate = 24_000;
+
     public static VoiceLiveSessionOptions Build(ServerSessionConfig config, string instructions)
     {
         var options = BuildCommon(config);
@@ -24,7 +26,7 @@ public static class SessionOptionsBuilder
             TurnDetection = BuildTurnDetection(config.TurnTaking),
             InputAudioFormat = InputAudioFormat.Pcm16,
             OutputAudioFormat = OutputAudioFormat.Pcm16,
-            InputAudioSamplingRate = config.InputAudioSamplingRate,
+            InputAudioSamplingRate = BrowserPcmSamplingRate,
             Avatar = BuildAvatar(config.Avatar),
         };
 

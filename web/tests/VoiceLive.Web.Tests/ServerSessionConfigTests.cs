@@ -51,6 +51,17 @@ public class ServerSessionConfigTests
     }
 
     [Fact]
+    public void Build_always_uses_browser_pcm_sampling_rate()
+    {
+        var config = AppConfigLoader.Load(RepoConfigDir, ModelOpts()).Server;
+
+        var options = SessionOptionsBuilder.Build(config, "Keep answers short.");
+
+        Assert.Equal(24000, SessionOptionsBuilder.BrowserPcmSamplingRate);
+        Assert.Equal(24000, options.InputAudioSamplingRate);
+    }
+
+    [Fact]
     public void LoadServerSession_defaults_mode_to_model()
     {
         var config = AppConfigLoader.Load(RepoConfigDir, ModelOpts()).Server;

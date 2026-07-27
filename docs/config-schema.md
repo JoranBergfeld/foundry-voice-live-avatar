@@ -14,6 +14,8 @@ The `/config` directory contains the web app's JSON config files. All values bel
 
 `endpoint`, `apiVersion`, and `mode` are no longer in `config/session.json`. `session.model` is required only in **model** mode; in **agent** mode the Voice Live agent owns the model. Agent name and project live in `config/agent.json`.
 
+Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio worklet resamples from the actual browser audio context rate before sending microphone audio.
+
 ## `session.json`
 
 | Field | Type | Required | Allowed values / default | Description |
@@ -23,7 +25,6 @@ The `/config` directory contains the web app's JSON config files. All values bel
 | `voice` | object | Required | Contains `type`, `name` | Voice selection. |
 | `voice.type` | string | Required | `azure-realtime-native`, `azure-standard`, `azure-custom`, `openai`; default: `azure-realtime-native` | Voice provider/type. |
 | `voice.name` | string | Required | Default: `en-US-AndrewNeural` | Voice name. |
-| `inputAudioSamplingRate` | number | Required | Default: `24000` | Input audio sampling rate in hertz. |
 | `inputAudioNoiseReduction` | object | Required | Contains `type` | Input audio noise reduction settings. |
 | `inputAudioNoiseReduction.type` | string | Required | Default: `azure_deep_noise_suppression` | Noise reduction mode. |
 | `inputAudioEchoCancellation` | object | Required | Contains `type` | Input audio echo cancellation settings. |
