@@ -134,6 +134,23 @@ public class ServerSessionConfigTests
         Assert.Contains(expectedError, ex.Message);
     }
 
+    [Fact]
+    public void AppConfigLoader_accepts_default_end_of_utterance_threshold_level()
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue(
+            "turntaking.json",
+            "modes.open-mic.turnDetection.endOfUtteranceDetection.thresholdLevel",
+            "\"default\"");
+
+        var loaded = AppConfigLoader.Load(config.Directory, ModelOpts());
+
+        Assert.Equal(
+            "default",
+            loaded.Server.TurnTaking.Modes["open-mic"].TurnDetection?
+                .EndOfUtteranceDetection?.ThresholdLevel);
+    }
+
     [Theory]
     [InlineData("modes.gated.turnDetection", "{\"type\":\"server_vad\"}", "turntaking.json: modes.gated: manualTurn cannot be combined with turnDetection")]
     [InlineData("modes.open-mic.turnDetection", "null", "turntaking.json: modes.open-mic.turnDetection: is required when manualTurn is false")]
