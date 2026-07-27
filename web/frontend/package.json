@@ -8,7 +8,7 @@
     "test": "npm run typecheck && npm run test:e2e",
     "typecheck": "tsc --noEmit",
     "build": "esbuild src/main.ts --bundle --format=esm --outfile=../src/VoiceLive.Web/wwwroot/app.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "npm run build && playwright test"
   },
   "keywords": [],
   "author": "",
