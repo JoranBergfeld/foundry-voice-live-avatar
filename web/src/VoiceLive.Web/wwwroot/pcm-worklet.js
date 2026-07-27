@@ -25,10 +25,10 @@ class Pcm16Worklet extends AudioWorkletProcessor {
 
     const pcm = new Int16Array(outputSamples);
     for (let i = 0; i < outputSamples; i++) {
-      const sourceIndex = this.readOffset + Math.floor(i * ratio);
+      const sourceIndex = Math.floor(this.readOffset + i * ratio);
       pcm[i] = this.sampleToInt16(this.getSample(sourceIndex));
     }
-    this.readOffset += Math.floor(outputSamples * ratio);
+    this.readOffset += outputSamples * ratio;
     this.compact();
     this.port.postMessage(pcm.buffer, [pcm.buffer]);
     return true;
