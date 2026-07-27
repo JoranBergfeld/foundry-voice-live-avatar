@@ -4,6 +4,8 @@ obj/
 *.user
 # Node
 node_modules/
+web/frontend/test-results/
+web/frontend/playwright-report/
 web/src/VoiceLive.Web/wwwroot/app.js
 web/src/VoiceLive.Web/wwwroot/app.js.map
 # OS/editor

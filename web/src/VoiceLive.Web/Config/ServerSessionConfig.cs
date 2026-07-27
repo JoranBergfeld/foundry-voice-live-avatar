@@ -13,7 +13,6 @@ public sealed record ServerSessionConfig(
     string ApiVersion,
     string Model,
     ServerVoiceConfig Voice,
-    int InputAudioSamplingRate,
     ServerNoiseReductionConfig? InputAudioNoiseReduction,
     ServerEchoCancellationConfig? InputAudioEchoCancellation,
     ServerTranscriptionConfig? InputAudioTranscription,
@@ -33,8 +32,6 @@ public sealed record ServerTurnDetectionConfig(
 
 public sealed record ServerTurnModeConfig(
     bool ManualTurn = false,
-    bool? GateGatesBargeIn = null,
-    bool? InterruptResponse = null,
     ServerTurnDetectionConfig? TurnDetection = null);
 
 public sealed record ServerTurnTakingConfig(string ActiveMode, IReadOnlyDictionary<string, ServerTurnModeConfig> Modes)
@@ -86,9 +83,6 @@ public static partial class WebConfigLoader
                 errors.Add($"session.json: voice.type: '{session.Voice.Type}' is not one of {string.Join(", ", VoiceTypes)}");
         }
 
-        if (session.InputAudioSamplingRate <= 0)
-            errors.Add("session.json: inputAudioSamplingRate: must be greater than zero");
-
         RequireServer(turn.ActiveMode, "turntaking.json", "activeMode", errors);
         if (turn.Modes is null || turn.Modes.Count == 0)
             errors.Add("turntaking.json: modes: is required");
@@ -102,6 +96,10 @@ public static partial class WebConfigLoader
         RequireServer(agent.AgentProjectName, "agent.json", "agentProjectName", errors);
         if (agent.SafeQuestions is null) errors.Add("agent.json: safeQuestions: is required");
 
+        ValidateSessionSettings(session, errors);
+        ValidateTurnTakingSettings(turn, errors);
+        ValidateAvatarSettings(avatar, errors);
+
         if (errors.Count > 0)
             return (null, null);
 
@@ -112,7 +110,6 @@ public static partial class WebConfigLoader
             env.ApiVersion,
             model,
             new ServerVoiceConfig(session.Voice!.Type!, session.Voice.Name!, session.Voice.Temperature, session.Voice.Rate, session.Voice.Style),
-            session.InputAudioSamplingRate,
             session.InputAudioNoiseReduction is null ? null : new ServerNoiseReductionConfig(session.InputAudioNoiseReduction.Type!),
             session.InputAudioEchoCancellation is null ? null : new ServerEchoCancellationConfig(session.InputAudioEchoCancellation.Type!),
             session.InputAudioTranscription is null ? null : new ServerTranscriptionConfig(session.InputAudioTranscription.Model!, session.InputAudioTranscription.Language),
@@ -194,11 +191,154 @@ public static partial class WebConfigLoader
         if (string.IsNullOrWhiteSpace(value)) errors.Add($"{file}: {field}: {message}");
     }
 
+    private static void ValidateSessionSettings(ServerSessionFile session, List<string> errors)
+    {
+        if (session.InputAudioTranscription is not null)
+            RequireServer(
+                session.InputAudioTranscription.Model,
+                "session.json",
+                "inputAudioTranscription.model",
+                errors);
+
+        if (session.InputAudioNoiseReduction is not null)
+            ValidateSupportedValue(
+                session.InputAudioNoiseReduction.Type,
+                "session.json",
+                "inputAudioNoiseReduction.type",
+                NoiseReductionTypes,
+                errors);
+
+        if (session.InputAudioEchoCancellation is not null)
+            ValidateSupportedValue(
+                session.InputAudioEchoCancellation.Type,
+                "session.json",
+                "inputAudioEchoCancellation.type",
+                EchoCancellationTypes,
+                errors);
+    }
+
+    private static void ValidateTurnTakingSettings(ServerTurnTakingFile turn, List<string> errors)
+    {
+        if (turn.Modes is null)
+            return;
+
+        foreach (var (modeName, mode) in turn.Modes)
+        {
+            var modeField = $"modes.{modeName}";
+            if (mode is null)
+            {
+                errors.Add($"turntaking.json: {modeField}: is required");
+                continue;
+            }
+
+            if (mode.ManualTurn && mode.TurnDetection is not null)
+                errors.Add($"turntaking.json: {modeField}: manualTurn cannot be combined with turnDetection");
+            else if (!mode.ManualTurn && mode.TurnDetection is null)
+                errors.Add($"turntaking.json: {modeField}.turnDetection: is required when manualTurn is false");
+
+            if (mode.TurnDetection is not null)
+                ValidateTurnDetection(mode.TurnDetection, $"{modeField}.turnDetection", errors);
+        }
+    }
+
+    private static void ValidateTurnDetection(
+        ServerTurnDetectionConfig turnDetection,
+        string field,
+        List<string> errors)
+    {
+        ValidateSupportedValue(
+            turnDetection.Type,
+            "turntaking.json",
+            $"{field}.type",
+            TurnDetectionTypes,
+            errors);
+
+        if (turnDetection.Threshold is < 0 or > 1)
+            errors.Add($"turntaking.json: {field}.threshold: must be between 0 and 1");
+        if (turnDetection.PrefixPaddingMs is < 0)
+            errors.Add($"turntaking.json: {field}.prefixPaddingMs: must be non-negative");
+        if (turnDetection.SilenceDurationMs is < 0)
+            errors.Add($"turntaking.json: {field}.silenceDurationMs: must be non-negative");
+
+        if (turnDetection.EndOfUtteranceDetection is not null)
+            ValidateEouDetection(
+                turnDetection.EndOfUtteranceDetection,
+                $"{field}.endOfUtteranceDetection",
+                errors);
+    }
+
+    private static void ValidateEouDetection(
+        ServerEouDetectionConfig eou,
+        string field,
+        List<string> errors)
+    {
+        ValidateSupportedValue(eou.Model, "turntaking.json", $"{field}.model", EouModels, errors);
+
+        ValidateSupportedValue(
+            eou.ThresholdLevel,
+            "turntaking.json",
+            $"{field}.thresholdLevel",
+            EouThresholdLevels,
+            errors);
+
+        if (eou.TimeoutMs is null)
+            errors.Add($"turntaking.json: {field}.timeoutMs: is required");
+        else if (eou.TimeoutMs <= 0)
+            errors.Add($"turntaking.json: {field}.timeoutMs: must be positive");
+    }
+
+    private static void ValidateAvatarSettings(ServerAvatarFile avatar, List<string> errors)
+    {
+        if (avatar.Video is null)
+            return;
+
+        if (avatar.Video.Resolution is null)
+        {
+            errors.Add("avatar.json: video.resolution: is required");
+        }
+        else
+        {
+            if (avatar.Video.Resolution.Width <= 0)
+                errors.Add("avatar.json: video.resolution.width: must be positive");
+            if (avatar.Video.Resolution.Height <= 0)
+                errors.Add("avatar.json: video.resolution.height: must be positive");
+        }
+
+        if (avatar.Video.Bitrate is null)
+            errors.Add("avatar.json: video.bitrate: is required");
+        else if (avatar.Video.Bitrate <= 0)
+            errors.Add("avatar.json: video.bitrate: must be positive");
+
+        if (avatar.Video.Codec is not null)
+            ValidateSupportedValue(
+                avatar.Video.Codec,
+                "avatar.json",
+                "video.codec",
+                VideoCodecs,
+                errors);
+    }
+
+    private static void ValidateSupportedValue(
+        string? value,
+        string file,
+        string field,
+        IReadOnlyCollection<string> supported,
+        List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            errors.Add($"{file}: {field}: is required");
+        }
+        else if (!supported.Contains(value))
+        {
+            errors.Add($"{file}: {field}: '{value}' is not supported; supported: {string.Join(", ", supported)}");
+        }
+    }
+
     private sealed record ServerSessionFile(
         string? Region,
         string? Model,
         ServerVoiceFile? Voice,
-        int InputAudioSamplingRate,
         ServerNoiseReductionFile? InputAudioNoiseReduction,
         ServerEchoCancellationFile? InputAudioEchoCancellation,
         ServerTranscriptionFile? InputAudioTranscription);
