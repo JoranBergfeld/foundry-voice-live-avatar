@@ -274,15 +274,16 @@ public static partial class WebConfigLoader
     {
         ValidateSupportedValue(eou.Model, "turntaking.json", $"{field}.model", EouModels, errors);
 
-        if (eou.ThresholdLevel is not null)
-            ValidateSupportedValue(
-                eou.ThresholdLevel,
-                "turntaking.json",
-                $"{field}.thresholdLevel",
-                EouThresholdLevels,
-                errors);
+        ValidateSupportedValue(
+            eou.ThresholdLevel,
+            "turntaking.json",
+            $"{field}.thresholdLevel",
+            EouThresholdLevels,
+            errors);
 
-        if (eou.TimeoutMs is <= 0)
+        if (eou.TimeoutMs is null)
+            errors.Add($"turntaking.json: {field}.timeoutMs: is required");
+        else if (eou.TimeoutMs <= 0)
             errors.Add($"turntaking.json: {field}.timeoutMs: must be positive");
     }
 
@@ -303,7 +304,9 @@ public static partial class WebConfigLoader
                 errors.Add("avatar.json: video.resolution.height: must be positive");
         }
 
-        if (avatar.Video.Bitrate is <= 0)
+        if (avatar.Video.Bitrate is null)
+            errors.Add("avatar.json: video.bitrate: is required");
+        else if (avatar.Video.Bitrate <= 0)
             errors.Add("avatar.json: video.bitrate: must be positive");
 
         if (avatar.Video.Codec is not null)

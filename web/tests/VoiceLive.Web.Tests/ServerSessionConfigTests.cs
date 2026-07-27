@@ -134,6 +134,57 @@ public class ServerSessionConfigTests
         Assert.Contains(expectedError, ex.Message);
     }
 
+    [Theory]
+    [InlineData(
+        "turntaking.json",
+        "modes.open-mic.turnDetection.endOfUtteranceDetection.thresholdLevel",
+        "turntaking.json: modes.open-mic.turnDetection.endOfUtteranceDetection.thresholdLevel: is required")]
+    [InlineData(
+        "turntaking.json",
+        "modes.open-mic.turnDetection.endOfUtteranceDetection.timeoutMs",
+        "turntaking.json: modes.open-mic.turnDetection.endOfUtteranceDetection.timeoutMs: is required")]
+    [InlineData(
+        "avatar.json",
+        "video.bitrate",
+        "avatar.json: video.bitrate: is required")]
+    public void AppConfigLoader_rejects_missing_required_nested_session_settings(
+        string file,
+        string field,
+        string expectedError)
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.RemoveJsonValue(file, field);
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains(expectedError, ex.Message);
+    }
+
+    [Fact]
+    public void AppConfigLoader_aggregates_missing_required_nested_session_settings()
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.RemoveJsonValue(
+            "turntaking.json",
+            "modes.open-mic.turnDetection.endOfUtteranceDetection.thresholdLevel");
+        config.RemoveJsonValue(
+            "turntaking.json",
+            "modes.open-mic.turnDetection.endOfUtteranceDetection.timeoutMs");
+        config.RemoveJsonValue("avatar.json", "video.bitrate");
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains(
+            "turntaking.json: modes.open-mic.turnDetection.endOfUtteranceDetection.thresholdLevel: is required",
+            ex.Message);
+        Assert.Contains(
+            "turntaking.json: modes.open-mic.turnDetection.endOfUtteranceDetection.timeoutMs: is required",
+            ex.Message);
+        Assert.Contains("avatar.json: video.bitrate: is required", ex.Message);
+    }
+
     [Fact]
     public void AppConfigLoader_accepts_default_end_of_utterance_threshold_level()
     {
@@ -222,6 +273,27 @@ public class ServerSessionConfigTests
                 current = current[segment]!.AsObject();
 
             current[segments[^1]] = JsonNode.Parse(jsonValue);
+            File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        }
+
+        public void RemoveJsonValue(string file, string field)
+        {
+            var path = Path.Combine(Directory, file);
+            var root = JsonNode.Parse(
+                File.ReadAllText(path),
+                nodeOptions: null,
+                documentOptions: new JsonDocumentOptions
+                {
+                    CommentHandling = JsonCommentHandling.Skip,
+                    AllowTrailingCommas = true
+                })!.AsObject();
+
+            var segments = field.Split('.');
+            JsonObject current = root;
+            foreach (var segment in segments[..^1])
+                current = current[segment]!.AsObject();
+
+            current.Remove(segments[^1]);
             File.WriteAllText(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         }
 
