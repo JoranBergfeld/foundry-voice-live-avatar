@@ -48,6 +48,9 @@ export type DisplayView = {
   avatar: HTMLVideoElement;
   setStatus(message: string): void;
   setError(message: string): void;
+  clearError(): void;
+  setReconnectHandler(handler: () => void): void;
+  setDisconnected(disconnected: boolean): void;
 };
 
 function button(label: string): HTMLButtonElement {
@@ -387,20 +390,42 @@ export function renderDisplayView(root: HTMLElement): DisplayView {
 
   const overlay = document.createElement("div");
   overlay.className = "display-status";
-  overlay.textContent = "Connecting to avatar session…";
+  overlay.setAttribute("role", "status");
+  const message = document.createElement("span");
+  message.textContent = "Connecting to avatar session…";
 
+  const reconnectButton = document.createElement("button");
+  reconnectButton.type = "button";
+  reconnectButton.className = "reconnect-button display-reconnect";
+  reconnectButton.textContent = "Reconnect";
+  reconnectButton.hidden = true;
+
+  overlay.append(message, reconnectButton);
   root.append(video, overlay);
 
   return {
     root,
     avatar: video,
-    setStatus(message) {
+    setStatus(value) {
       overlay.classList.remove("error");
-      overlay.textContent = message;
+      overlay.setAttribute("role", "status");
+      message.textContent = value;
     },
-    setError(message) {
+    setError(value) {
       overlay.classList.add("error");
-      overlay.textContent = message;
+      overlay.setAttribute("role", "alert");
+      message.textContent = value;
+    },
+    clearError() {
+      overlay.classList.remove("error");
+      overlay.setAttribute("role", "status");
+      message.textContent = "";
+    },
+    setReconnectHandler(handler) {
+      reconnectButton.onclick = handler;
+    },
+    setDisconnected(disconnected) {
+      reconnectButton.hidden = !disconnected;
     },
   };
 }

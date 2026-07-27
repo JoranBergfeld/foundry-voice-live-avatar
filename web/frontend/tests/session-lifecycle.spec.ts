@@ -31,6 +31,49 @@ async function readyOperator(page: Parameters<typeof installBrowserMocks>[0], ac
   }
 }
 
+async function openDisplay(page: Parameters<typeof installBrowserMocks>[0]) {
+  await page.goto("/?view=display");
+  await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
+}
+
+async function readyDisplay(page: Parameters<typeof installBrowserMocks>[0]) {
+  await sendReadyFrame(page);
+  await expect.poll(async () => (await inspectLifecycle(page)).peerConnections.at(-1)?.offerCalls).toBe(1);
+  await expect(page.getByText("webrtc: offer sent; waiting for answer")).toBeVisible();
+}
+
+test("display reconnects with fresh resources after clean socket closure", async ({ page }) => {
+  await openDisplay(page);
+  await readyDisplay(page);
+
+  await closeLatestSocketCleanly(page);
+  const reconnect = page.getByRole("button", { name: "Reconnect" });
+  await expect(reconnect).toBeVisible();
+
+  await reconnect.click();
+  await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(2);
+  await readyDisplay(page);
+
+  const state = await inspectLifecycle(page);
+  expect(state.sockets).toHaveLength(2);
+  expect(state.peerConnections).toHaveLength(2);
+  expect(state.peerConnections[0]).toMatchObject({ closed: true, closeCalls: 1 });
+  expect(state.peerConnections[1].closed).toBe(false);
+  expect(state.getUserMediaCalls).toBe(0);
+  expect(state.audioContexts).toHaveLength(0);
+  await expect(reconnect).toBeHidden();
+});
+
+test("display unexpected closure retains the error and offers reconnect", async ({ page }) => {
+  await openDisplay(page);
+  await readyDisplay(page);
+
+  await closeLatestSocketUnexpectedly(page);
+
+  await expect(page.getByRole("alert")).toContainText("WebSocket closed unexpectedly");
+  await expect(page.getByRole("button", { name: "Reconnect" })).toBeVisible();
+});
+
 test("socket closure tears down browser resources and offers reconnect", async ({ page }) => {
   await openOperator(page);
   await readyOperator(page);

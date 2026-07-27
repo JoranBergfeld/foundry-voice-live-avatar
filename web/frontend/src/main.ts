@@ -71,16 +71,16 @@ class ThinVoiceLiveClient {
   constructor(view: InteractiveView | DisplayView) {
     this.view = view;
     this.interactive = isInteractiveView(view) ? view : undefined;
-    this.interactive?.setReconnectHandler(() => this.start());
+    this.view.setReconnectHandler(() => this.start());
   }
 
   start() {
     if (this.socket || this.disconnectPromise) return;
     this.disconnected = false;
     const token = ++this.sessionToken;
-    this.interactive?.setDisconnected(false);
+    this.view.setDisconnected(false);
     this.interactive?.setReady(false);
-    this.interactive?.clearError();
+    this.view.clearError();
     this.setStatus("connection", "connecting");
     let socket: WebSocket;
     try {
@@ -497,7 +497,7 @@ class ThinVoiceLiveClient {
 
       this.setStatus("connection", "disconnected");
       if (message) this.fail(message);
-      this.interactive?.setDisconnected(true);
+      this.view.setDisconnected(true);
     })();
 
     this.disconnectPromise = cleanup;
