@@ -277,6 +277,53 @@ test("pill and notice do not overlap the toolbar on mobile 390x844", async ({ pa
   expect(noticeBox!.y).toBeGreaterThanOrEqual(toolbarBottom);
 });
 
+test("landing error overlay stacks above open transcript panel and actions", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/");
+
+  // Open the transcript panel so it has a rendered presence on screen
+  await page.getByRole("button", { name: "Transcript" }).click();
+  await expect(page.locator(".landing-transcript")).toHaveClass(/open/);
+
+  // Simulate setError being called (mirrors what disconnect() does when it calls fail())
+  await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>(".landing-error");
+    if (el) {
+      el.hidden = false;
+      el.textContent = "Test fatal error";
+    }
+  });
+  await expect(page.locator(".landing-error")).toBeVisible();
+
+  // The error overlay must render above the open transcript panel.
+  // Probe a point inside the transcript panel; elementFromPoint should hit the
+  // error overlay (z-index 4), not the transcript (z-index 2).
+  const transcriptBox = await page.locator(".landing-transcript").boundingBox();
+  expect(transcriptBox).not.toBeNull();
+  const txProbeX = transcriptBox!.x + transcriptBox!.width / 2;
+  const txProbeY = transcriptBox!.y + transcriptBox!.height / 2;
+
+  const errorAboveTranscript = await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y);
+    const error = document.querySelector(".landing-error");
+    return !!hit && !!error && (hit === error || error.contains(hit));
+  }, { x: txProbeX, y: txProbeY });
+  expect(errorAboveTranscript).toBe(true);
+
+  // The error overlay must also render above the actions toolbar (z-index 3).
+  const actionsBox = await page.locator(".landing-actions").boundingBox();
+  expect(actionsBox).not.toBeNull();
+  const axProbeX = actionsBox!.x + actionsBox!.width / 2;
+  const axProbeY = actionsBox!.y + actionsBox!.height / 2;
+
+  const errorAboveActions = await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y);
+    const error = document.querySelector(".landing-error");
+    return !!hit && !!error && (hit === error || error.contains(hit));
+  }, { x: axProbeX, y: axProbeY });
+  expect(errorAboveActions).toBe(true);
+});
+
 test("reconnect with changed mode replaces old gated and mute handlers", async ({ page }) => {
   await page.goto("/");
   await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
