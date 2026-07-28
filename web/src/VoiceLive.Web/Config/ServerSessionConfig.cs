@@ -244,8 +244,7 @@ public static partial class WebConfigLoader
                 {
                     if (!videoProp.Name.Equals("background", StringComparison.OrdinalIgnoreCase))
                         continue;
-                    if (videoProp.Value.ValueKind != JsonValueKind.Object &&
-                        videoProp.Value.ValueKind != JsonValueKind.Null)
+                    if (videoProp.Value.ValueKind != JsonValueKind.Object)
                         errors.Add("avatar.json: video.background: must be an object");
                     break;
                 }

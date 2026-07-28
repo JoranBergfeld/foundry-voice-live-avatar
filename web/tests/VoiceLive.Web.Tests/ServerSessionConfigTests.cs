@@ -359,16 +359,22 @@ public class ServerSessionConfigTests
         Assert.Contains("avatar.json: customized: is not supported", ex.Message);
     }
 
-    [Fact]
-    public void AppConfigLoader_rejects_non_object_background_with_exact_error()
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"not-an-object\"")]
+    [InlineData("42")]
+    [InlineData("[\"item\"]")]
+    [InlineData("true")]
+    public void AppConfigLoader_rejects_non_object_background_with_exact_error(string backgroundJson)
     {
         using var config = TemporaryConfig.CopyOf(RepoConfigDir);
-        config.SetJsonValue("avatar.json", "video.background", "\"not-an-object\"");
+        config.SetJsonValue("avatar.json", "video.background", backgroundJson);
 
         var ex = Assert.Throws<WebConfigValidationException>(() =>
             AppConfigLoader.Load(config.Directory, ModelOpts()));
 
         Assert.Contains("avatar.json: video.background: must be an object", ex.Message);
+        Assert.DoesNotContain("avatar.json: json: invalid JSON", ex.Message);
     }
 
     [Theory]
