@@ -82,7 +82,7 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 | Field | Type | Required | Allowed values / default | Description |
 | --- | --- | --- | --- | --- |
 | `character` | string | Required | Default: `lisa` | Avatar character. |
-| `preview` | boolean | Required | Default: `false`; local-only flag | Selects the preview avatar API. Must be a boolean; missing, `null`, or non-boolean values are invalid. |
+| `preview` | boolean | Required | Default: `false`; local-only flag | Local preview-avatar flag. Preview avatars omit style; this field is not sent to Voice Live. Must be a boolean; missing, `null`, or non-boolean values are invalid. |
 | `style` | string | Required when `preview` is `false`; forbidden when `preview` is `true` | Default: `casual-sitting` | Avatar style. Must be omitted entirely when `preview` is `true`; any `style` property present alongside `preview: true` is rejected. |
 | `video` | object | Required | Contains `resolution`, `bitrate`, `codec`, `background` | Video output settings. |
 | `video.resolution` | object | Required | Contains `width`, `height` | Video resolution. |
