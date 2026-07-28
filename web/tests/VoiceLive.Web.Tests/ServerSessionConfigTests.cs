@@ -55,6 +55,7 @@ public class ServerSessionConfigTests
         Assert.Contains(options.Modalities, m => m.Equals(InteractionModality.Text));
         Assert.Contains(options.Modalities, m => m.Equals(InteractionModality.Audio));
         Assert.NotNull(options.Avatar);
+        Assert.False(options.Avatar.Customized);
         Assert.Equal("lisa", options.Avatar.Character);
         Assert.Equal("casual-sitting", options.Avatar.Style);
         Assert.Equal(2000000, options.Avatar.Video.Bitrate);
@@ -233,6 +234,7 @@ public class ServerSessionConfigTests
         Assert.Equal(OutputAudioFormat.Pcm16, options.OutputAudioFormat);
         Assert.Equal(24000, options.InputAudioSamplingRate);
         Assert.NotNull(options.Avatar);
+        Assert.False(options.Avatar.Customized);
         Assert.Equal("lisa", options.Avatar.Character);
         Assert.Equal("casual-sitting", options.Avatar.Style);
         Assert.Contains(options.Modalities, m => m.Equals(InteractionModality.Text));
@@ -383,6 +385,34 @@ public class ServerSessionConfigTests
             AppConfigLoader.Load(config.Directory, ModelOpts()));
 
         Assert.Contains(expectedError, ex.Message);
+    }
+
+    // ── Task 2: SDK mapping for avatar background and preview ──────────────────
+
+    [Fact]
+    public void Build_background_config_maps_exact_image_url_to_sdk_options()
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", "video.background", "{\"imageUrl\":\"https://example.com/bg.jpg\"}");
+
+        var loaded = AppConfigLoader.Load(config.Directory, ModelOpts());
+        var options = SessionOptionsBuilder.Build(loaded.Server, "instructions");
+
+        Assert.Equal("https://example.com/bg.jpg", options.Avatar.Video.Background.ImageUrl);
+    }
+
+    [Fact]
+    public void Build_preview_true_maps_customized_false_and_null_style()
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", "preview", "true");
+        config.RemoveJsonValue("avatar.json", "style");
+
+        var loaded = AppConfigLoader.Load(config.Directory, ModelOpts());
+        var options = SessionOptionsBuilder.Build(loaded.Server, "instructions");
+
+        Assert.False(options.Avatar.Customized);
+        Assert.Null(options.Avatar.Style);
     }
 
     private sealed class TemporaryConfig : IDisposable

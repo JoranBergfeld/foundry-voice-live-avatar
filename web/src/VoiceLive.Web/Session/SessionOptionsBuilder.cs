@@ -129,7 +129,9 @@ public static class SessionOptionsBuilder
 
     private static AvatarConfiguration BuildAvatar(ServerAvatarConfig config)
     {
-        var avatar = new AvatarConfiguration(config.Character, false) { Style = config.Style };
+        var avatar = new AvatarConfiguration(config.Character, customized: false);
+        if (!config.Preview)
+            avatar.Style = config.Style;
         if (config.Video is not null)
         {
             avatar.Video = new VideoParams
@@ -138,6 +140,8 @@ public static class SessionOptionsBuilder
                 Codec = config.Video.Codec,
                 Resolution = new VideoResolution(config.Video.Resolution.Width, config.Video.Resolution.Height)
             };
+            if (config.Video.Background is not null)
+                avatar.Video.Background = new VideoBackground { ImageUrl = config.Video.Background.ImageUrl };
         }
         return avatar;
     }
