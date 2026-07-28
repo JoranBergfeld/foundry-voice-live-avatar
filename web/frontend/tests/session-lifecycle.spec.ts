@@ -423,6 +423,48 @@ test("pill and notice do not overlap toolbar at intermediate 900x800 viewport", 
   expect(noticeBox!.y).toBeGreaterThanOrEqual(toolbarBottom);
 });
 
+test("landing notice stacks above open transcript panel on desktop 1024x768", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/");
+
+  // Open transcript panel and wait for the 0.2s slide-in transition to finish
+  await page.getByRole("button", { name: "Transcript" }).click();
+  await expect(page.locator(".landing-transcript")).toHaveClass(/open/);
+  await expect(page.locator(".landing-transcript")).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
+
+  // Reveal the landing notice via direct DOM manipulation (mirrors noteNonFatal / avatar-error)
+  await page.evaluate(() => {
+    const notice = document.querySelector<HTMLElement>(".landing-notice");
+    if (notice) {
+      notice.hidden = false;
+      notice.textContent = "Avatar unavailable: test error";
+    }
+  });
+  await expect(page.locator(".landing-notice")).toBeVisible();
+
+  // At 1024px the transcript panel (min(24rem,80vw)=384px) occupies the right side
+  // and the centered notice (min(32rem,90vw)=512px) overlaps it — verify that
+  // the notice (z-index 3) is the hit target in the overlapping region, not the panel (z-index 2).
+  const noticeBox = await page.locator(".landing-notice").boundingBox();
+  const panelBox = await page.locator(".landing-transcript").boundingBox();
+  expect(noticeBox).not.toBeNull();
+  expect(panelBox).not.toBeNull();
+
+  const overlapLeft = Math.max(noticeBox!.x, panelBox!.x);
+  const overlapRight = Math.min(noticeBox!.x + noticeBox!.width, panelBox!.x + panelBox!.width);
+  expect(overlapRight).toBeGreaterThan(overlapLeft);
+
+  const probeX = (overlapLeft + overlapRight) / 2;
+  const probeY = noticeBox!.y + noticeBox!.height / 2;
+
+  const noticeIsHitTarget = await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y);
+    const notice = document.querySelector(".landing-notice");
+    return !!hit && !!notice && (hit === notice || notice.contains(hit));
+  }, { x: probeX, y: probeY });
+  expect(noticeIsHitTarget).toBe(true);
+});
+
 test("reconnect with changed mode replaces old gated and mute handlers", async ({ page }) => {
   await page.goto("/");
   await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);

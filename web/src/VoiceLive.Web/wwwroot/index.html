@@ -172,6 +172,7 @@
         top: 4.5rem; /* always clear the toolbar (1rem top + ~2.25rem height + buffer) */
         left: 50%;
         transform: translateX(-50%);
+        z-index: 3; /* above transcript panel (2) */
         background: rgb(0 0 0 / 60%);
         color: #fff;
         padding: 0.4rem 0.9rem;
@@ -298,6 +299,7 @@
         top: 4.5rem; /* always clear the toolbar (1rem top + ~2.25rem height + buffer) */
         left: 50%;
         transform: translateX(-50%);
+        z-index: 3; /* above transcript panel (2); below error overlay (4) and reconnect (5) */
         max-width: min(32rem, 90vw);
         background: rgb(180 35 24 / 92%);
         color: #fff;
