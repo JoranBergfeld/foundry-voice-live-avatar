@@ -284,6 +284,10 @@ test("landing error overlay stacks above open transcript panel and actions", asy
   // Open the transcript panel so it has a rendered presence on screen
   await page.getByRole("button", { name: "Transcript" }).click();
   await expect(page.locator(".landing-transcript")).toHaveClass(/open/);
+  // Wait for the 0.2s slide-in CSS transition to finish; without this the
+  // bounding-box query races against the animation and the centre point can
+  // be reported outside the viewport.
+  await expect(page.locator(".landing-transcript")).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
 
   // Simulate setError being called (mirrors what disconnect() does when it calls fail())
   await page.evaluate(() => {
@@ -322,6 +326,101 @@ test("landing error overlay stacks above open transcript panel and actions", asy
     return !!hit && !!error && (hit === error || error.contains(hit));
   }, { x: axProbeX, y: axProbeY });
   expect(errorAboveActions).toBe(true);
+});
+
+test("reconnect button remains clickable while landing error overlay is visible", async ({ page }) => {
+  await page.goto("/");
+  await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
+
+  await closeLatestSocketUnexpectedly(page);
+
+  const errorOverlay = page.locator(".landing-error");
+  const reconnect = page.locator(".landing-reconnect");
+
+  await expect(errorOverlay).toBeVisible();
+  await expect(reconnect).toBeVisible();
+
+  // Reconnect must sit above the full-screen error overlay: required z-index 5 > 4
+  await expect(reconnect).toHaveCSS("z-index", "5");
+  await expect(errorOverlay).toHaveCSS("z-index", "4");
+
+  // elementFromPoint at the reconnect button center must resolve to the reconnect button,
+  // not to the error overlay underneath it.
+  const reconnectBox = await reconnect.boundingBox();
+  expect(reconnectBox).not.toBeNull();
+  const cx = reconnectBox!.x + reconnectBox!.width / 2;
+  const cy = reconnectBox!.y + reconnectBox!.height / 2;
+  const hitsReconnect = await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y);
+    const btn = document.querySelector(".landing-reconnect");
+    return !!hit && !!btn && (hit === btn || btn.contains(hit));
+  }, { x: cx, y: cy });
+  expect(hitsReconnect).toBe(true);
+
+  // Clicking reconnect must open a new socket despite the overlay being visible.
+  await reconnect.click();
+  await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(2);
+});
+
+test("reconnect button is above transcript panel on mobile and clickable after clean disconnect", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
+
+  await page.getByRole("button", { name: "Transcript" }).click();
+  await expect(page.locator(".landing-transcript")).toHaveClass(/open/);
+
+  // Clean disconnect shows reconnect but no error overlay.
+  await closeLatestSocketCleanly(page);
+
+  const reconnect = page.locator(".landing-reconnect");
+  await expect(reconnect).toBeVisible();
+
+  // Reconnect must sit above the transcript bottom sheet: required z-index 5 > 2
+  await expect(reconnect).toHaveCSS("z-index", "5");
+  await expect(page.locator(".landing-transcript")).toHaveCSS("z-index", "2");
+
+  // elementFromPoint at the reconnect button center must resolve to the reconnect button,
+  // not to the transcript panel behind it.
+  const reconnectBox = await reconnect.boundingBox();
+  expect(reconnectBox).not.toBeNull();
+  const cx = reconnectBox!.x + reconnectBox!.width / 2;
+  const cy = reconnectBox!.y + reconnectBox!.height / 2;
+  const hitsReconnect = await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y);
+    const btn = document.querySelector(".landing-reconnect");
+    return !!hit && !!btn && (hit === btn || btn.contains(hit));
+  }, { x: cx, y: cy });
+  expect(hitsReconnect).toBe(true);
+
+  await reconnect.click();
+  await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(2);
+});
+
+test("pill and notice do not overlap toolbar at intermediate 900x800 viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 800 });
+  await page.goto("/");
+
+  const toolbar = page.getByRole("navigation", { name: "Landing controls" });
+  await expect(toolbar).toBeVisible();
+  const toolbarBox = await toolbar.boundingBox();
+  expect(toolbarBox).not.toBeNull();
+
+  await page.evaluate(() => {
+    const pill = document.querySelector<HTMLElement>(".landing-pill");
+    const notice = document.querySelector<HTMLElement>(".landing-notice");
+    if (pill) { pill.hidden = false; pill.textContent = "Connecting\u2026"; }
+    if (notice) { notice.hidden = false; notice.textContent = "Non-fatal notice"; }
+  });
+
+  const pillBox = await page.locator(".landing-pill").boundingBox();
+  const noticeBox = await page.locator(".landing-notice").boundingBox();
+  expect(pillBox).not.toBeNull();
+  expect(noticeBox).not.toBeNull();
+
+  const toolbarBottom = toolbarBox!.y + toolbarBox!.height;
+  expect(pillBox!.y).toBeGreaterThanOrEqual(toolbarBottom);
+  expect(noticeBox!.y).toBeGreaterThanOrEqual(toolbarBottom);
 });
 
 test("reconnect with changed mode replaces old gated and mute handlers", async ({ page }) => {
