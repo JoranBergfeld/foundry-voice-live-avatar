@@ -288,6 +288,20 @@ public class ServerSessionConfigTests
         Assert.Contains("avatar.json: preview: is required", ex.Message);
     }
 
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"true\"")]
+    public void AppConfigLoader_rejects_non_boolean_preview_with_exact_error(string previewJson)
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", "preview", previewJson);
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains("avatar.json: preview: must be a boolean", ex.Message);
+    }
+
     [Fact]
     public void AppConfigLoader_rejects_style_when_preview_is_true()
     {

@@ -213,7 +213,11 @@ public static partial class WebConfigLoader
                 if (prop.Name.Equals("preview", StringComparison.OrdinalIgnoreCase))
                 {
                     hasPreview = true;
-                    previewIsTrue = prop.Value.ValueKind == JsonValueKind.True;
+                    var kind = prop.Value.ValueKind;
+                    if (kind == JsonValueKind.True)
+                        previewIsTrue = true;
+                    else if (kind != JsonValueKind.False)
+                        errors.Add("avatar.json: preview: must be a boolean");
                     break;
                 }
             }
