@@ -106,7 +106,7 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 - `agent.json.groundingStrategy` must be one of `pack`, `rag`, or `both`.
 - `agent.json.conversationResumePolicy` must be one of `resume` or `fresh`.
 - Unknown values for `voice.type`, `turntaking.activeMode`, `agent.groundingStrategy`, or `agent.conversationResumePolicy` fail fast at startup.
-- `avatar.json.preview` is required and must be a boolean; missing, `null`, or non-boolean values are invalid.
+- `avatar.json.preview` is a local preview-avatar flag (required, boolean); preview avatars omit style and this field is not sent to Voice Live; missing, `null`, or non-boolean values are invalid.
 - `avatar.json.style` is required when `preview` is `false` and must not be present when `preview` is `true`; the presence of any `style` property alongside `preview: true` is rejected.
 - `avatar.json.customized` is not supported; the app always creates non-customized avatars regardless of config.
 - `avatar.json.video.background` must be an object if present; null or any non-object value is invalid.
