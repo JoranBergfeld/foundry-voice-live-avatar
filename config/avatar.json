@@ -1,6 +1,6 @@
 {
   "character": "lisa",
+  "preview": false,
   "style": "casual-sitting",
-  "customized": false,
   "video": { "resolution": { "width": 1920, "height": 1080 }, "bitrate": 2000000, "codec": "h264" }
 }

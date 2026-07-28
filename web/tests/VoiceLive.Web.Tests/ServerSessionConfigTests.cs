@@ -239,6 +239,137 @@ public class ServerSessionConfigTests
         Assert.Contains(options.Modalities, m => m.Equals(InteractionModality.Audio));
     }
 
+    // ── Task 1: avatar preview / background ───────────────────────────────────
+
+    [Fact]
+    public void LoadServerSession_default_avatar_has_preview_false_style_and_no_background()
+    {
+        var config = AppConfigLoader.Load(RepoConfigDir, ModelOpts()).Server;
+
+        Assert.Equal("lisa", config.Avatar.Character);
+        Assert.False(config.Avatar.Preview);
+        Assert.Equal("casual-sitting", config.Avatar.Style);
+        Assert.Null(config.Avatar.Video?.Background);
+    }
+
+    [Fact]
+    public void LoadServerSession_background_maps_to_server_config_with_exact_image_url()
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", "video.background", "{\"imageUrl\":\"https://example.com/bg.jpg\"}");
+
+        var loaded = AppConfigLoader.Load(config.Directory, ModelOpts());
+
+        Assert.Equal("https://example.com/bg.jpg", loaded.Server.Avatar.Video?.Background?.ImageUrl);
+    }
+
+    [Fact]
+    public void LoadServerSession_preview_true_without_style_produces_null_style()
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", "preview", "true");
+        config.RemoveJsonValue("avatar.json", "style");
+
+        var loaded = AppConfigLoader.Load(config.Directory, ModelOpts());
+
+        Assert.True(loaded.Server.Avatar.Preview);
+        Assert.Null(loaded.Server.Avatar.Style);
+    }
+
+    [Fact]
+    public void AppConfigLoader_rejects_missing_preview_with_exact_field_error()
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.RemoveJsonValue("avatar.json", "preview");
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains("avatar.json: preview: is required", ex.Message);
+    }
+
+    [Fact]
+    public void AppConfigLoader_rejects_style_when_preview_is_true()
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", "preview", "true");
+        // style remains from default config — must be rejected
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains("avatar.json: style: must not be set when preview is true", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("\"\"")]
+    [InlineData("\"   \"")]
+    public void AppConfigLoader_rejects_blank_style_when_preview_false(string styleJson)
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", "style", styleJson);
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains("avatar.json: style: is required when preview is false", ex.Message);
+    }
+
+    [Fact]
+    public void AppConfigLoader_rejects_missing_style_when_preview_false()
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.RemoveJsonValue("avatar.json", "style");
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains("avatar.json: style: is required when preview is false", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("customized")]
+    [InlineData("Customized")]
+    [InlineData("CUSTOMIZED")]
+    public void AppConfigLoader_rejects_customized_property_case_insensitively(string propertyName)
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", propertyName, "false");
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains("avatar.json: customized: is not supported", ex.Message);
+    }
+
+    [Fact]
+    public void AppConfigLoader_rejects_non_object_background_with_exact_error()
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", "video.background", "\"not-an-object\"");
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains("avatar.json: video.background: must be an object", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("{}", "avatar.json: video.background.imageUrl: is required")]
+    [InlineData("{\"imageUrl\":\"\"}", "avatar.json: video.background.imageUrl: is required")]
+    [InlineData("{\"imageUrl\":\"relative/path.jpg\"}", "avatar.json: video.background.imageUrl: must be an absolute HTTPS URL")]
+    [InlineData("{\"imageUrl\":\"http://example.com/bg.jpg\"}", "avatar.json: video.background.imageUrl: must be an absolute HTTPS URL")]
+    public void AppConfigLoader_rejects_invalid_background_image_url(string backgroundJson, string expectedError)
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", "video.background", backgroundJson);
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains(expectedError, ex.Message);
+    }
+
     private sealed class TemporaryConfig : IDisposable
     {
         private TemporaryConfig(string directory) => Directory = directory;

@@ -40,8 +40,17 @@ public sealed record ServerTurnTakingConfig(string ActiveMode, IReadOnlyDictiona
 }
 
 public sealed record ServerVideoResolutionConfig(int Width, int Height);
-public sealed record ServerVideoConfig(ServerVideoResolutionConfig Resolution, int? Bitrate = null, string? Codec = null);
-public sealed record ServerAvatarConfig(string Character, string Style, bool Customized, ServerVideoConfig? Video = null);
+public sealed record ServerVideoBackgroundConfig(string ImageUrl);
+public sealed record ServerVideoConfig(
+    ServerVideoResolutionConfig Resolution,
+    int? Bitrate = null,
+    string? Codec = null,
+    ServerVideoBackgroundConfig? Background = null);
+public sealed record ServerAvatarConfig(
+    string Character,
+    string? Style,
+    bool Preview,
+    ServerVideoConfig? Video = null);
 public sealed record ServerAgentConfig(string AgentName, string AgentProjectName, IReadOnlyList<string> SafeQuestions);
 
 public static partial class WebConfigLoader
@@ -90,7 +99,8 @@ public static partial class WebConfigLoader
             errors.Add($"turntaking.json: activeMode: '{turn.ActiveMode}' is not present in modes");
 
         RequireServer(avatar.Character, "avatar.json", "character", errors);
-        RequireServer(avatar.Style, "avatar.json", "style", errors);
+        if (avatar.Preview == false)
+            RequireServer(avatar.Style, "avatar.json", "style", errors, "is required when preview is false");
 
         RequireServer(agent.AgentName, "agent.json", "agentName", errors);
         RequireServer(agent.AgentProjectName, "agent.json", "agentProjectName", errors);
@@ -114,7 +124,15 @@ public static partial class WebConfigLoader
             session.InputAudioEchoCancellation is null ? null : new ServerEchoCancellationConfig(session.InputAudioEchoCancellation.Type!),
             session.InputAudioTranscription is null ? null : new ServerTranscriptionConfig(session.InputAudioTranscription.Model!, session.InputAudioTranscription.Language),
             new ServerTurnTakingConfig(turn.ActiveMode!, turn.Modes!),
-            new ServerAvatarConfig(avatar.Character!, avatar.Style!, avatar.Customized, avatar.Video),
+            new ServerAvatarConfig(
+                avatar.Character!,
+                avatar.Style,
+                avatar.Preview ?? false,
+                avatar.Video is null ? null : new ServerVideoConfig(
+                    avatar.Video.Resolution!,
+                    avatar.Video.Bitrate,
+                    avatar.Video.Codec,
+                    BuildBackground(avatar.Video.Background))),
             new ServerAgentConfig(agent.AgentName!, agent.AgentProjectName!, agent.SafeQuestions!),
             mode);
 
@@ -173,6 +191,60 @@ public static partial class WebConfigLoader
             {
                 errors.Add("avatar.json: root: must be an object");
                 return (null, null);
+            }
+
+            var root = doc.RootElement;
+
+            // Reject removed 'customized' property (case-insensitive)
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (prop.Name.Equals("customized", StringComparison.OrdinalIgnoreCase))
+                {
+                    errors.Add("avatar.json: customized: is not supported");
+                    break;
+                }
+            }
+
+            // Check 'preview' presence and 'style' exclusivity
+            bool hasPreview = false;
+            bool previewIsTrue = false;
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (prop.Name.Equals("preview", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasPreview = true;
+                    previewIsTrue = prop.Value.ValueKind == JsonValueKind.True;
+                    break;
+                }
+            }
+
+            if (!hasPreview)
+                errors.Add("avatar.json: preview: is required");
+
+            if (hasPreview && previewIsTrue)
+            {
+                bool hasStyle = root.EnumerateObject()
+                    .Any(p => p.Name.Equals("style", StringComparison.OrdinalIgnoreCase));
+                if (hasStyle)
+                    errors.Add("avatar.json: style: must not be set when preview is true");
+            }
+
+            // Reject non-object video.background
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (!prop.Name.Equals("video", StringComparison.OrdinalIgnoreCase) ||
+                    prop.Value.ValueKind != JsonValueKind.Object)
+                    continue;
+                foreach (var videoProp in prop.Value.EnumerateObject())
+                {
+                    if (!videoProp.Name.Equals("background", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (videoProp.Value.ValueKind != JsonValueKind.Object &&
+                        videoProp.Value.ValueKind != JsonValueKind.Null)
+                        errors.Add("avatar.json: video.background: must be an object");
+                    break;
+                }
+                break;
             }
 
             var avatar = doc.RootElement.Deserialize<ServerAvatarFile>(ServerOpts)
@@ -316,6 +388,24 @@ public static partial class WebConfigLoader
                 "video.codec",
                 VideoCodecs,
                 errors);
+
+        if (avatar.Video.Background is { } bgElement && bgElement.ValueKind == JsonValueKind.Object)
+        {
+            var bg = bgElement.Deserialize<ServerVideoBackgroundFile>(ServerOpts);
+            if (string.IsNullOrWhiteSpace(bg?.ImageUrl))
+                errors.Add("avatar.json: video.background.imageUrl: is required");
+            else if (!Uri.TryCreate(bg.ImageUrl, UriKind.Absolute, out var uri) ||
+                     uri.Scheme != Uri.UriSchemeHttps)
+                errors.Add("avatar.json: video.background.imageUrl: must be an absolute HTTPS URL");
+        }
+    }
+
+    private static ServerVideoBackgroundConfig? BuildBackground(JsonElement? background)
+    {
+        if (background is null || background.Value.ValueKind != JsonValueKind.Object)
+            return null;
+        var bg = background.Value.Deserialize<ServerVideoBackgroundFile>(ServerOpts);
+        return bg?.ImageUrl is string imageUrl ? new ServerVideoBackgroundConfig(imageUrl) : null;
     }
 
     private static void ValidateSupportedValue(
@@ -348,6 +438,12 @@ public static partial class WebConfigLoader
     private sealed record ServerEchoCancellationFile(string? Type);
     private sealed record ServerTranscriptionFile(string? Model, string? Language = null);
     private sealed record ServerTurnTakingFile(string? ActiveMode, Dictionary<string, ServerTurnModeConfig>? Modes);
-    private sealed record ServerAvatarFile(string? Character, string? Style, bool Customized, ServerVideoConfig? Video = null);
+    private sealed record ServerAvatarFile(string? Character, string? Style, bool? Preview, ServerAvatarVideoFile? Video = null);
+    private sealed record ServerAvatarVideoFile(
+        ServerVideoResolutionConfig? Resolution,
+        int? Bitrate = null,
+        string? Codec = null,
+        JsonElement? Background = null);
+    private sealed record ServerVideoBackgroundFile(string? ImageUrl);
     private sealed record ServerAgentFile(string? AgentName, string? AgentProjectName, IReadOnlyList<string>? SafeQuestions);
 }
