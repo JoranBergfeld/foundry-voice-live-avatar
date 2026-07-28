@@ -231,6 +231,52 @@ test("landing controls are labeled and visible above the avatar", async ({ page 
   }
 });
 
+test("transcript close panel button clears the open class on desktop 1280x720", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Transcript" }).click();
+  await expect(page.locator(".landing-transcript")).toHaveClass(/open/);
+
+  // Close button must not be geometrically covered by the toolbar
+  const toolbarBox = await page.getByRole("navigation", { name: "Landing controls" }).boundingBox();
+  const closeBox = await page.getByRole("button", { name: "Close panel" }).boundingBox();
+  expect(toolbarBox).not.toBeNull();
+  expect(closeBox).not.toBeNull();
+  expect(closeBox!.y).toBeGreaterThanOrEqual(toolbarBox!.y + toolbarBox!.height);
+
+  // Clicking the button must actually close the panel
+  await page.getByRole("button", { name: "Close panel" }).click();
+  await expect(page.locator(".landing-transcript")).not.toHaveClass(/open/);
+});
+
+test("pill and notice do not overlap the toolbar on mobile 390x844", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await expect(page.getByRole("navigation", { name: "Landing controls" })).toBeVisible();
+  const toolbarBox = await page.getByRole("navigation", { name: "Landing controls" }).boundingBox();
+  expect(toolbarBox).not.toBeNull();
+
+  // Reveal pill and notice via DOM manipulation for layout testing
+  await page.evaluate(() => {
+    const pill = document.querySelector<HTMLElement>(".landing-pill");
+    const notice = document.querySelector<HTMLElement>(".landing-notice");
+    if (pill) { pill.hidden = false; pill.textContent = "Connecting\u2026"; }
+    if (notice) { notice.hidden = false; notice.textContent = "Non-fatal notice"; }
+  });
+
+  const pillBox = await page.locator(".landing-pill").boundingBox();
+  const noticeBox = await page.locator(".landing-notice").boundingBox();
+  expect(pillBox).not.toBeNull();
+  expect(noticeBox).not.toBeNull();
+
+  const toolbarBottom = toolbarBox!.y + toolbarBox!.height;
+  // Both elements must start at or below the toolbar bottom edge
+  expect(pillBox!.y).toBeGreaterThanOrEqual(toolbarBottom);
+  expect(noticeBox!.y).toBeGreaterThanOrEqual(toolbarBottom);
+});
+
 test("reconnect with changed mode replaces old gated and mute handlers", async ({ page }) => {
   await page.goto("/");
   await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
