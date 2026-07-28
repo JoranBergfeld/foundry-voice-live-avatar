@@ -300,6 +300,7 @@ public class ServerSessionConfigTests
             AppConfigLoader.Load(config.Directory, ModelOpts()));
 
         Assert.Contains("avatar.json: preview: must be a boolean", ex.Message);
+        Assert.DoesNotContain("avatar.json: json: invalid JSON", ex.Message);
     }
 
     [Fact]

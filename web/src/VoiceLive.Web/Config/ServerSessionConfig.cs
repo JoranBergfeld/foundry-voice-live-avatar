@@ -194,6 +194,7 @@ public static partial class WebConfigLoader
             }
 
             var root = doc.RootElement;
+            var errorsBeforeRawChecks = errors.Count;
 
             // Reject removed 'customized' property (case-insensitive)
             foreach (var prop in root.EnumerateObject())
@@ -250,6 +251,9 @@ public static partial class WebConfigLoader
                 }
                 break;
             }
+
+            if (errors.Count > errorsBeforeRawChecks)
+                return (null, null);
 
             var avatar = doc.RootElement.Deserialize<ServerAvatarFile>(ServerOpts)
                 ?? throw new JsonException("null document");
