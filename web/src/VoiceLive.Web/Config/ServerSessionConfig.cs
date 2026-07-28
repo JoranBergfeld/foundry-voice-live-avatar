@@ -398,12 +398,33 @@ public static partial class WebConfigLoader
 
         if (avatar.Video.Background is { } bgElement && bgElement.ValueKind == JsonValueKind.Object)
         {
-            var bg = bgElement.Deserialize<ServerVideoBackgroundFile>(ServerOpts);
-            if (string.IsNullOrWhiteSpace(bg?.ImageUrl))
+            JsonElement? imageUrlElement = null;
+            foreach (var prop in bgElement.EnumerateObject())
+            {
+                if (prop.Name.Equals("imageUrl", StringComparison.OrdinalIgnoreCase))
+                {
+                    imageUrlElement = prop.Value;
+                    break;
+                }
+            }
+
+            if (imageUrlElement is null)
+            {
                 errors.Add("avatar.json: video.background.imageUrl: is required");
-            else if (!Uri.TryCreate(bg.ImageUrl, UriKind.Absolute, out var uri) ||
-                     uri.Scheme != Uri.UriSchemeHttps)
-                errors.Add("avatar.json: video.background.imageUrl: must be an absolute HTTPS URL");
+            }
+            else if (imageUrlElement.Value.ValueKind != JsonValueKind.String)
+            {
+                errors.Add("avatar.json: video.background.imageUrl: must be a string");
+            }
+            else
+            {
+                var imageUrl = imageUrlElement.Value.GetString();
+                if (string.IsNullOrWhiteSpace(imageUrl))
+                    errors.Add("avatar.json: video.background.imageUrl: is required");
+                else if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri) ||
+                         uri.Scheme != Uri.UriSchemeHttps)
+                    errors.Add("avatar.json: video.background.imageUrl: must be an absolute HTTPS URL");
+            }
         }
     }
 
@@ -411,8 +432,16 @@ public static partial class WebConfigLoader
     {
         if (background is null || background.Value.ValueKind != JsonValueKind.Object)
             return null;
-        var bg = background.Value.Deserialize<ServerVideoBackgroundFile>(ServerOpts);
-        return bg?.ImageUrl is string imageUrl ? new ServerVideoBackgroundConfig(imageUrl) : null;
+        foreach (var prop in background.Value.EnumerateObject())
+        {
+            if (prop.Name.Equals("imageUrl", StringComparison.OrdinalIgnoreCase) &&
+                prop.Value.ValueKind == JsonValueKind.String)
+            {
+                var imageUrl = prop.Value.GetString();
+                return imageUrl is not null ? new ServerVideoBackgroundConfig(imageUrl) : null;
+            }
+        }
+        return null;
     }
 
     private static void ValidateSupportedValue(
@@ -451,6 +480,5 @@ public static partial class WebConfigLoader
         int? Bitrate = null,
         string? Codec = null,
         JsonElement? Background = null);
-    private sealed record ServerVideoBackgroundFile(string? ImageUrl);
     private sealed record ServerAgentFile(string? AgentName, string? AgentProjectName, IReadOnlyList<string>? SafeQuestions);
 }

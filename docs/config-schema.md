@@ -91,7 +91,7 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 | `video.bitrate` | number | Required | Default: `2000000` | Video bitrate in bits per second. |
 | `video.codec` | string | Required | Default: `h264` | Video codec. |
 | `video.background` | object | Optional | | Background settings for the avatar video. Must be an object if present; null or any non-object value is invalid. |
-| `video.background.imageUrl` | string | Required within `video.background` | Absolute HTTPS URL | Background image URL. Must be an absolute HTTPS URL. |
+| `video.background.imageUrl` | string | Required within `video.background` | Absolute HTTPS URL | Background image URL. Must be a string and an absolute HTTPS URL. Non-string values (numbers, booleans, arrays, objects) are invalid. |
 
 ## Validation rules
 
@@ -110,4 +110,4 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 - `avatar.json.style` is required when `preview` is `false` and must not be present when `preview` is `true`; the presence of any `style` property alongside `preview: true` is rejected.
 - `avatar.json.customized` is not supported; the app always creates non-customized avatars regardless of config.
 - `avatar.json.video.background` must be an object if present; null or any non-object value is invalid.
-- `avatar.json.video.background.imageUrl` is required within `video.background` and must be an absolute HTTPS URL.
+- `avatar.json.video.background.imageUrl` is required within `video.background`, must be a string (numbers, booleans, arrays, and objects are invalid), and must be an absolute HTTPS URL.

@@ -393,6 +393,23 @@ public class ServerSessionConfigTests
         Assert.Contains(expectedError, ex.Message);
     }
 
+    [Theory]
+    [InlineData("{\"imageUrl\":42}")]
+    [InlineData("{\"imageUrl\":true}")]
+    [InlineData("{\"imageUrl\":[\"item\"]}")]
+    [InlineData("{\"imageUrl\":{\"nested\":1}}")]
+    public void AppConfigLoader_rejects_non_string_image_url_with_must_be_a_string_error(string backgroundJson)
+    {
+        using var config = TemporaryConfig.CopyOf(RepoConfigDir);
+        config.SetJsonValue("avatar.json", "video.background", backgroundJson);
+
+        var ex = Assert.Throws<WebConfigValidationException>(() =>
+            AppConfigLoader.Load(config.Directory, ModelOpts()));
+
+        Assert.Contains("avatar.json: video.background.imageUrl: must be a string", ex.Message);
+        Assert.DoesNotContain("avatar.json: json: invalid JSON", ex.Message);
+    }
+
     // ── Task 2: SDK mapping for avatar background and preview ──────────────────
 
     [Fact]
