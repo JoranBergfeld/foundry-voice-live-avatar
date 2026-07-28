@@ -264,12 +264,16 @@ export function renderLandingView(root: HTMLElement): LandingView {
   pill.className = "landing-pill";
   pill.hidden = true;
 
+  const actions = document.createElement("nav");
+  actions.className = "landing-actions";
+  actions.setAttribute("aria-label", "Landing controls");
+
   const gear = document.createElement("a");
-  gear.className = "landing-gear";
+  gear.className = "landing-action landing-config";
   gear.href = "?view=operator";
-  gear.textContent = "⚙";
-  gear.setAttribute("aria-label", "Open troubleshoot view");
-  gear.title = "Troubleshoot";
+  gear.textContent = "⚙ Config";
+  gear.setAttribute("aria-label", "Config");
+  gear.title = "Config";
 
   const holdButton = document.createElement("button");
   holdButton.type = "button";
@@ -280,9 +284,9 @@ export function renderLandingView(root: HTMLElement): LandingView {
 
   const transcriptToggle = document.createElement("button");
   transcriptToggle.type = "button";
-  transcriptToggle.className = "landing-transcript-toggle";
-  transcriptToggle.textContent = "💬";
-  transcriptToggle.setAttribute("aria-label", "Toggle transcript");
+  transcriptToggle.className = "landing-action landing-transcript-toggle";
+  transcriptToggle.textContent = "💬 Transcript";
+  transcriptToggle.setAttribute("aria-label", "Transcript");
   transcriptToggle.title = "Transcript";
 
   const panel = document.createElement("aside");
@@ -294,7 +298,7 @@ export function renderLandingView(root: HTMLElement): LandingView {
   panelClose.type = "button";
   panelClose.className = "landing-transcript-close";
   panelClose.textContent = "×";
-  panelClose.setAttribute("aria-label", "Close transcript");
+  panelClose.setAttribute("aria-label", "Close panel");
   panelHeader.append(panelTitle, panelClose);
   const transcriptList = document.createElement("div");
   transcriptList.className = "landing-transcript-list";
@@ -320,7 +324,8 @@ export function renderLandingView(root: HTMLElement): LandingView {
   reconnectButton.textContent = "Reconnect";
   reconnectButton.hidden = true;
 
-  root.append(avatar, pill, gear, holdButton, transcriptToggle, panel, notice, errorOverlay, reconnectButton);
+  actions.append(gear, transcriptToggle);
+  root.append(avatar, pill, actions, holdButton, panel, notice, errorOverlay, reconnectButton);
 
   const addTranscript = createTranscriptAppender(transcriptList);
 

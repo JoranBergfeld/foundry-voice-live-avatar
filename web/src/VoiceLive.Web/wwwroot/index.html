@@ -179,20 +179,41 @@
         font-size: 0.85rem;
       }
 
-      .landing-gear {
+      .landing-actions {
         position: fixed;
         top: 1rem;
         right: 1rem;
-        width: 2.5rem;
-        height: 2.5rem;
-        border-radius: 50%;
-        background: rgb(255 255 255 / 14%);
-        color: #fff;
+        z-index: 3;
         display: flex;
+        gap: 0.5rem;
         align-items: center;
-        justify-content: center;
+      }
+
+      .landing-action {
+        background: #fff;
+        color: #121826;
+        border: 1px solid #d9dee8;
+        border-radius: 999px;
+        box-shadow: 0 0.15rem 0.5rem rgb(0 0 0 / 30%);
+        font: inherit;
+        font-weight: 600;
+        padding: 0.4rem 0.85rem;
+        min-height: 2.25rem;
+        cursor: pointer;
         text-decoration: none;
-        font-size: 1.2rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+      }
+
+      .landing-action:hover {
+        background: #f0f2f8;
+      }
+
+      .landing-action:focus-visible {
+        outline: 2px solid #2454d6;
+        outline-offset: 2px;
+        background: #f0f2f8;
       }
 
       .landing-talk {
@@ -221,14 +242,7 @@
       }
 
       .landing-transcript-toggle {
-        position: fixed;
-        bottom: 1.6rem;
-        right: 1.2rem;
-        width: 3rem;
-        height: 3rem;
-        border-radius: 50%;
-        background: rgb(255 255 255 / 16%);
-        font-size: 1.2rem;
+        /* Inherits .landing-action styles; no extra overrides needed */
       }
 
       .landing-transcript {
@@ -237,6 +251,7 @@
         right: 0;
         bottom: 0;
         width: min(24rem, 80vw);
+        z-index: 2;
         background: rgb(8 13 24 / 82%);
         backdrop-filter: blur(6px);
         border-left: 1px solid rgb(255 255 255 / 10%);
@@ -325,6 +340,18 @@
 
         .landing-transcript.open {
           transform: translateY(0);
+        }
+
+        .landing-actions {
+          top: 0.6rem;
+          right: 0.6rem;
+          gap: 0.35rem;
+        }
+
+        .landing-action {
+          padding: 0.3rem 0.65rem;
+          min-height: 2rem;
+          font-size: 0.9rem;
         }
       }
     </style>

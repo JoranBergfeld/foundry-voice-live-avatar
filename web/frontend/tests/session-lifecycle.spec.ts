@@ -201,6 +201,36 @@ test("stale gated resume rejection cannot overwrite a reconnected session", asyn
   await expect(page.getByRole("button", { name: "Reconnect" })).toBeHidden();
 });
 
+test("landing controls are labeled and visible above the avatar", async ({ page }) => {
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
+
+    const actions = page.getByRole("navigation", { name: "Landing controls" });
+    const config = page.getByRole("link", { name: "Config" });
+    const transcript = page.getByRole("button", { name: "Transcript" });
+
+    await expect(actions).toBeVisible();
+    await expect(actions).toHaveCSS("z-index", "3");
+    await expect(config).toBeVisible();
+    await expect(config).toHaveAttribute("href", "?view=operator");
+    await expect(transcript).toBeVisible();
+
+    const box = await actions.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+
+    await transcript.click();
+    await expect(page.locator(".landing-transcript")).toHaveClass(/open/);
+  }
+});
+
 test("reconnect with changed mode replaces old gated and mute handlers", async ({ page }) => {
   await page.goto("/");
   await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
