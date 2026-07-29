@@ -280,9 +280,10 @@ docs/                     # Runbook, config schema, rehearsal checklist, specs
 infra/                    # Bicep templates for azd (App Service, Foundry, RBAC)
 scripts/                  # azd postprovision agent discovery scripts
 web/
-  frontend/               # TypeScript browser client (main.ts, views.ts, pcm-worklet.js)
+  frontend/               # TypeScript browser client (main.ts, views.ts)
     tests/                # Playwright browser tests
   src/VoiceLive.Web/      # ASP.NET Core app (Auth, Config, Health, Session, Program.cs)
+    wwwroot/pcm-worklet.js  # Microphone AudioWorklet
   tests/                  # Backend integration and unit tests
 azure.yaml                # azd service definition and hooks
 README.md
