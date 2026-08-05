@@ -20,7 +20,7 @@ The Voice Live credential never leaves the server. Avatar media still flows brow
 - `POST /login` signs in with configured credentials.
 - `POST /logout` signs out.
 - `GET /api/config` requires authentication and returns sanitized config: region, API version, model, voice, avatar settings, active turn-taking mode, agent metadata, and safe questions.
-- `WS /ws/session` requires authentication and starts a server-side Voice Live session. Browser binary frames are PCM16 audio; browser JSON controls include `avatar-offer`, `start-turn`, `end-turn`, `barge-in`, `say`, and `ping`. Server JSON events include `ready`, transcripts, speech/avatar state, `avatar-answer`, `response-done`, `avatar-error` (non-fatal; avatar unavailable but voice continues), and `error`.
+- `WS /ws/session` requires authentication and starts a server-side Voice Live session. Browser binary frames are PCM16 audio; browser JSON controls include `avatar-offer`, `start-turn`, `end-turn`, `barge-in`, `say`, and `ping`. Server JSON events include `ready`, transcripts, speech/avatar state, `avatar-answer`, `response-done`, `avatar-error` (non-fatal; avatar unavailable — avatar video **and audio** are lost, WebSocket and transcripts survive but there is no audible output), and `error`.
 
 ## Run locally
 

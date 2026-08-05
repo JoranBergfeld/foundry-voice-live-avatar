@@ -222,7 +222,7 @@ See [docs/config-schema.md](docs/config-schema.md) for the full schema and all f
 | `avatar-answer` | SDP answer from Voice Live |
 | tool frames | Tool call notifications |
 | `response-done` | Turn complete |
-| `avatar-error` | Non-fatal; avatar unavailable, voice continues |
+| `avatar-error` | Non-fatal; avatar unavailable; avatar video **and audio** are lost (both ride the same WebRTC peer connection) — WebSocket, microphone capture, and transcripts survive but there is no audible output to the room |
 | `error` | Fatal session error |
 
 Inbound browser frames are capped at 1 MiB. Outbound sends are serialized. Active session count, error count, and session duration are tracked as OpenTelemetry metrics. Errors from Voice Live are sanitized before forwarding. The bridge cleans up the Voice Live session and releases the concurrency gate on exit.
@@ -235,7 +235,7 @@ Inbound browser frames are capped at 1 MiB. Outbound sends are serialized. Activ
 - **Audio worklet** — `web/src/VoiceLive.Web/wwwroot/pcm-worklet.js` captures mono microphone input, converts to PCM16, and sends binary frames over the WebSocket.
 - **Turn-taking** — gated mode sends `start-turn`/`end-turn` on button press/release; open-mic mode streams continuously; hybrid uses VAD.
 - **Transcripts and tools** — displayed in the operator view; tool call events from the bridge are shown as structured notifications.
-- **Error and reconnect** — reconnection is **operator-initiated, not automatic**. On disconnect every view reveals a **Reconnect** button; there is no retry timer and no backoff. Fatal errors surface as an error banner; non-fatal avatar errors surface as a separate notice while voice continues. An unattended `?view=display` screen will therefore stay disconnected until someone clicks Reconnect — staff accordingly.
+- **Error and reconnect** — reconnection is **operator-initiated, not automatic**. On disconnect every view reveals a **Reconnect** button; there is no retry timer and no backoff. Fatal errors surface as an error banner; non-fatal avatar errors surface as a separate notice — avatar video **and audio** are lost (both ride the same WebRTC peer connection), and the WebSocket, microphone capture, and transcripts survive but there is no audible output to the room. An unattended `?view=display` screen will therefore stay disconnected until someone clicks Reconnect — staff accordingly.
 - **Resource teardown** — microphone tracks, AudioContext, WebSocket, and RTCPeerConnection are all closed on session end.
 
 ### Authentication and trust boundaries

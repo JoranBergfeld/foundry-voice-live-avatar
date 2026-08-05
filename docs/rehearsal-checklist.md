@@ -27,7 +27,7 @@
 - [ ] Open display view if needed: `http://localhost:5280/?view=display` or `<deployed-url>/?view=display`.
 - [ ] Sign in with the configured operator credentials.
 - [ ] Grant microphone permission in the operator browser.
-- [ ] **Sign in on the display tab as well.** If the display tab is in the same browser profile as the operator tab, the session cookie is already shared — reload the display tab after signing in on the operator tab. If the display screen is a separate machine or browser profile (the normal venue setup), navigate to `/?view=display` on that machine and sign in with the configured operator credentials there too.
+- [ ] **Sign in on the display tab as well.** If the display tab is in the same browser profile as the operator tab, the session cookie is already shared — sign in on the operator tab first, then navigate the display tab explicitly to `/?view=display` (signing in always returns you to `/`, and the redirect to `/login` discards the `?view=display` query). If the display screen is a separate machine or browser profile (the normal venue setup), navigate to `/?view=display` on that machine, sign in with the configured operator credentials, then navigate to `/?view=display` again (sign-in always redirects back to `/`).
 - [ ] **Click anywhere on the display screen once** to satisfy the browser autoplay/user-gesture requirement for that tab. (User activation is per-document; a gesture in the operator tab does not cover the display tab.)
 - [ ] Confirm avatar video and audio arrive **in the display tab**.
 - [ ] In the **operator tab**: click a safe question or use hold-to-talk once to satisfy browser autoplay/user-gesture requirements for that tab.

@@ -570,6 +570,14 @@ Added a new bullet: a `?view=display` screen that disconnects stays dead until a
   - `docs/rehearsal-checklist.md` — replaced "continue the show" with accurate fallback instruction
   - **Note:** `main.ts:412` has a stale comment; it is out of scope (code change), flagged in report.
 
+**Post-merge HIGH findings (code-review task, recorded here):**
+
+- [x] **Fix HIGH — fabricated finding ID H-07 (`docs/runbook.md:141`):** Removed the "Tracked as finding H-07 in `review-merged.md`" reference (no such ID exists; H series stops at H-05). Replaced with: *"This is a known gap, not a design decision; forwarding `response.audio.delta` to the browser and playing it would make true voice-only fallback possible, at which point this section must be updated."* The H-05 citation at `runbook.md:118` was verified correct and left untouched.
+
+- [x] **Fix HIGH — three surviving "voice continues" falsehoods:** `README.md:225` (event table), `README.md:238` (Error and reconnect bullet), and `web/README.md:23` (WebSocket event list) all still asserted that voice continues after an avatar error. Corrected all three to state that avatar video **and audio** are both lost (both ride the same WebRTC peer connection) while WebSocket, microphone capture, and transcripts survive but there is no audible output to the room.
+
+- [x] **Fix HIGH — display-tab sign-in step unsatisfiable (`docs/rehearsal-checklist.md:30`):** `Program.cs:106` redirects unauthenticated requests to `/login` with no `ReturnUrl`, discarding `?view=display`; `LoginEndpoints.cs:30` redirects POST to `/`, not `/?view=display`. Both same-profile and separate-machine paths left the operator on the wrong URL with no route to the display view without explicit re-navigation. Fixed by replacing the "reload" instruction with an explicit *"navigate the display tab to `/?view=display`"* step after sign-in, with an explanatory parenthetical. The gesture step (click in display tab) and confirm step remain in the correct order: sign in → navigate to `/?view=display` → click once → confirm video and audio.
+
 ---
 
 ## Task 7: D-03 — remove the three unimplemented `agent.json` keys
