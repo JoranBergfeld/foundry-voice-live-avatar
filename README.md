@@ -10,7 +10,7 @@ A stage-ready conversational avatar built on [Microsoft Foundry Voice Live](http
 | `/?view=operator` | Operator console — session controls, transcript, tool events, diagnostics |
 | `/?view=display` | Dedicated display surface for secondary screens |
 
-By default the app runs in **model mode** using `gpt-realtime`. Optional **agent mode** uses a named Voice Live agent created in the Azure AI Foundry portal. Reliability features include manual turn gating (Hold to talk, gated, or open-mic), automatic reconnect, health and error reporting at `/api/health`, safe-question injection, and voice-only fallback when avatar capacity is unavailable.
+By default the app runs in **model mode** using `gpt-realtime`. Optional **agent mode** uses a named Voice Live agent created in the Azure AI Foundry portal. Reliability features include manual turn gating (Hold to talk, gated, or open-mic), an operator-initiated **Reconnect** control on every view, health and error reporting at `/api/health`, safe-question injection, and voice-only fallback when avatar capacity is unavailable.
 
 ## How it works
 
@@ -235,7 +235,7 @@ Inbound browser frames are capped at 1 MiB. Outbound sends are serialized. Activ
 - **Audio worklet** — `web/src/VoiceLive.Web/wwwroot/pcm-worklet.js` captures mono microphone input, converts to PCM16, and sends binary frames over the WebSocket.
 - **Turn-taking** — gated mode sends `start-turn`/`end-turn` on button press/release; open-mic mode streams continuously; hybrid uses VAD.
 - **Transcripts and tools** — displayed in the operator view; tool call events from the bridge are shown as structured notifications.
-- **Error and reconnect** — transient errors trigger automatic reconnect with backoff; fatal errors surface in the operator view.
+- **Error and reconnect** — reconnection is **operator-initiated, not automatic**. On disconnect every view reveals a **Reconnect** button; there is no retry timer and no backoff. Fatal errors surface as an error banner; non-fatal avatar errors surface as a separate notice while voice continues. An unattended `?view=display` screen will therefore stay disconnected until someone clicks Reconnect — staff accordingly.
 - **Resource teardown** — microphone tracks, AudioContext, WebSocket, and RTCPeerConnection are all closed on session end.
 
 ### Authentication and trust boundaries
@@ -262,7 +262,7 @@ Explicit failure modes:
 | Voice Live service error | Sanitized `error` frame; session closed |
 | Avatar capacity unavailable | `avatar-error` frame; voice-only mode continues |
 
-Automatic reconnect is attempted by the browser for transient disconnects. Each browser tab opens an independent session with its own concurrency slot. Hosted tool calls may not produce a client-side tool event in all configurations.
+Reconnection is **operator-initiated**: on disconnect every view reveals a **Reconnect** button; there is no automatic retry or backoff. Each browser tab opens an independent session with its own concurrency slot. Hosted tool calls may not produce a client-side tool event in all configurations.
 
 ### Azure deployment architecture
 
