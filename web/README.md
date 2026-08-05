@@ -30,7 +30,7 @@ From the repository root:
 dotnet run --project web/src/VoiceLive.Web
 ```
 
-Open `http://localhost:5280/` for the default fullscreen avatar landing screen, sign in with the development credentials from `appsettings.Development.json` (`operator` / `rehearsal`), grant microphone permission, then hold **Hold to talk**. The ⚙ gear (top-right) opens the operator/troubleshoot console (`?view=operator`) with status lines, transcript, and safe-question buttons.
+Open `http://localhost:5280/` for the default fullscreen avatar landing screen, sign in with the credentials you set via `dotnet user-secrets` (see [CONTRIBUTING.md](../CONTRIBUTING.md)), grant microphone permission, then hold **Hold to talk**. The ⚙ gear (top-right) opens the operator/troubleshoot console (`?view=operator`) with status lines, transcript, and safe-question buttons.
 
 For an anonymous health check:
 

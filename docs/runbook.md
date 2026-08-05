@@ -96,7 +96,7 @@ Open one or two views — do **not** open all three simultaneously; the default 
 
 (Landing `/` also starts a session; if you open it, close it before opening a second view.)
 
-Sign in with the development credentials `operator` / `rehearsal`, grant microphone permission, then hold **Hold to talk** or click a safe question.
+Sign in with the credentials you configured via `dotnet user-secrets` (see [CONTRIBUTING.md](../CONTRIBUTING.md)), grant microphone permission, then hold **Hold to talk** or click a safe question.
 
 Quick anonymous health check:
 

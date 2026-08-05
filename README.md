@@ -79,7 +79,14 @@ dotnet run --project web/src/VoiceLive.Web
 
 MSBuild automatically runs `npm ci && npm run build` via the `BuildFrontend` target before the app starts.
 
-Open **http://localhost:5280/** and sign in with the development credentials `operator` / `rehearsal`.
+Set your own local credentials once — they are stored outside the repository and are never committed:
+
+```bash
+dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Username" "<your-username>"
+dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Password" "<your-password>"
+```
+
+Open **http://localhost:5280/** and sign in with those credentials.
 
 - Grant microphone access when prompted.
 - Press and hold **Hold to talk** to speak, or switch turn-taking mode in the operator view.
@@ -248,7 +255,7 @@ Inbound browser frames are capped at 1 MiB. Outbound sends are serialized. Activ
 
 ### Authentication and trust boundaries
 
-- **App credentials** (`Auth:Username` / `Auth:Password`) are used only for cookie authentication. Development defaults are `operator` / `rehearsal`.
+- **App credentials** (`Auth:Username` / `Auth:Password`) are used only for cookie authentication. There are **no defaults** — set them via `dotnet user-secrets` locally, and via `Auth__Username` / `Auth__Password` app settings in Azure. A single shared credential is the whole authentication model; see [ADR 0003](docs/adr/0003-shared-cookie-authentication.md) for what that does and does not protect.
 - **Azure credentials** are managed exclusively server-side via `DefaultAzureCredential`: Azure CLI credentials locally, system-assigned managed identity on App Service.
 - The browser **never** receives an Azure token. The `/api/config` endpoint returns only browser-safe fields.
 - **RBAC** — the managed identity is assigned `Cognitive Services User` and `Foundry User`. No API keys are used.

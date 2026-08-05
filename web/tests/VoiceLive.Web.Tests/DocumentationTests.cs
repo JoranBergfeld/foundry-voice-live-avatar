@@ -94,9 +94,14 @@ public sealed class DocumentationTests
         Assert.True(broken.Count == 0, "Broken relative links:\n  " + string.Join("\n  ", broken));
     }
 
-    /// <summary>
-    /// Credential literals that must never appear as code-formatted values in maintained
+    /// <summary>Credential literals that must never appear as code-formatted values in maintained
     /// documentation. Add to this list whenever a credential is retired, never remove from it.
+    /// <para>
+    /// IMPORTANT: each entry is the <em>rendered inline-code (backtick-wrapped) form</em> of the
+    /// secret, e.g. <c>`rehearsal`</c>. A fenced-block or quoted-JSON appearance of the same
+    /// secret would need its own separate entry — a bare word such as <c>rehearsal</c> added here
+    /// does NOT cover those appearances.
+    /// </para>
     /// </summary>
     private static readonly string[] ForbiddenCredentialLiterals = ["`rehearsal`"];
 
@@ -129,6 +134,11 @@ public sealed class DocumentationTests
     public void Development_settings_carry_no_auth_section()
     {
         var path = Path.Combine(RepoRoot, "web", "src", "VoiceLive.Web", "appsettings.Development.json");
+        // A missing file should fail, not pass vacuously: this test guards against committed
+        // credentials, so a missing file means we cannot verify the guard holds. Fail loudly.
+        Assert.True(
+            File.Exists(path),
+            $"appsettings.Development.json not found at '{path}'. The file is expected to exist (without an Auth section).");
         using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
 
         Assert.False(

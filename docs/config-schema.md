@@ -9,8 +9,8 @@ The `/config` directory contains the web app's JSON config files. All values bel
 | `VoiceLive:Endpoint` | string | Required | Default development value points at the Foundry account endpoint | Voice Live account endpoint, e.g. `https://<account>.services.ai.azure.com`. Environment variable: `VoiceLive__Endpoint`. |
 | `VoiceLive:ApiVersion` | string | Required | Default: `2025-10-01` | Voice Live API version. Environment variable: `VoiceLive__ApiVersion`. |
 | `VoiceLive:Mode` | string | Required | `model`, `agent`; default: `model` | Session establishment mode. Environment variable: `VoiceLive__Mode`; `VOICELIVE_MODE` can also override it. |
-| `Auth:Username` | string | Required | Development default: `operator` | App login username. Environment variable: `Auth__Username`. |
-| `Auth:Password` | string | Required | Development default: `rehearsal` | App login password. Environment variable: `Auth__Password`. |
+| `Auth:Username` | string | Required | No default | App login username. Set via `dotnet user-secrets` locally, `Auth__Username` in Azure. |
+| `Auth:Password` | string | Required | No default | App login password. Set via `dotnet user-secrets` locally, `Auth__Password` in Azure. Never commit this value or store it in an App Service setting in production — see [`production-deployment.md`](production-deployment.md). |
 
 `endpoint`, `apiVersion`, and `mode` are no longer in `config/session.json`. `session.model` is required only in **model** mode; in **agent** mode the Voice Live agent owns the model. Agent name and project live in `config/agent.json`.
 

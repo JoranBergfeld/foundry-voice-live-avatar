@@ -771,6 +771,16 @@ git commit -m "docs: describe the actual CSP instead of calling it strict"
 
 Five code-formatted occurrences of the dev password across four documents, plus the committed `Auth` block. Removing only the docs would leave a broken quickstart, so this task also wires up `dotnet user-secrets` — the minimal code change that makes the new instructions true. This closes the documentation half of **C-02**.
 
+**Carry-forward 1 applied (from Task 2 review):** Added a `File.Exists` guard to `Development_settings_carry_no_auth_section` in `DocumentationTests.cs`. Decision: missing file should **fail** — the test guards against committed credentials, so a missing file means we cannot verify the guard holds. Vacuous pass would be unsafe.
+
+**Carry-forward 2 applied (from Task 2 review):** Added a comment on `ForbiddenCredentialLiterals` in `DocumentationTests.cs` explaining that each entry is the rendered inline-code (backtick-wrapped) form of the secret. A fenced-block or quoted-JSON appearance needs its own entry.
+
+**AuthTests impact:** `ConfigEndpointTests` depended on the committed "operator"/"rehearsal" credentials. Fixed by adding `Auth:Username` / `Auth:Password` via `UseSetting` in `TestAppFactory`, and updating `ConfigEndpointTests` to use `TestAppFactory.TestUsername` / `TestAppFactory.TestPassword`.
+
+**"Single shared credential" claim verified:** Confirmed against auth code — one username/password pair from `AuthOptions`; `IsConfigured` gates all logins; no per-user accounts or roles.
+
+**Test result:** 95 passed / 2 failed / 97 total. Failures: `Every_docs_image_is_referenced_by_maintained_markdown` (Task 15) and `Maintained_markdown_has_no_broken_relative_links` (forward refs to `docs/adr/0003-shared-cookie-authentication.md`, `CONTRIBUTING.md`, `docs/production-deployment.md` intentionally not removed).
+
 **Files:**
 - Modify: `web/src/VoiceLive.Web/VoiceLive.Web.csproj`
 - Modify: `web/src/VoiceLive.Web/appsettings.Development.json`
@@ -778,124 +788,21 @@ Five code-formatted occurrences of the dev password across four documents, plus 
 - Modify: `web/README.md`
 - Modify: `docs/runbook.md`
 - Modify: `docs/config-schema.md`
+- Modify: `web/tests/VoiceLive.Web.Tests/DocumentationTests.cs` (carry-forwards 1 & 2)
+- Modify: `web/tests/VoiceLive.Web.Tests/TestAppFactory.cs` (add auth credentials for tests)
+- Modify: `web/tests/VoiceLive.Web.Tests/ConfigEndpointTests.cs` (use TestAppFactory credentials)
 
-- [ ] **Step 1: Enable user secrets on the web project**
-
-In `web/src/VoiceLive.Web/VoiceLive.Web.csproj`, add `UserSecretsId` to the first `<PropertyGroup>`:
-
-```xml
-    <UserSecretsId>voicelive-web-local-dev</UserSecretsId>
-```
-
-- [ ] **Step 2: Remove the committed credentials**
-
-Edit `web/src/VoiceLive.Web/appsettings.Development.json` and delete the entire `"Auth"` object. Keep the remaining settings and ensure the file is still valid JSON.
-
-- [ ] **Step 3: Verify the app now demands explicit credentials**
-
-Run: `dotnet build web/src/VoiceLive.Web -p:SkipFrontendBuild=true`
-
-Expected: **Build succeeded.**
-
-- [ ] **Step 4: Rewrite the README quickstart sign-in step**
-
-In `README.md`, replace:
-
-```markdown
-Open **http://localhost:5280/** and sign in with the development credentials `operator` / `rehearsal`.
-```
-
-with:
-
-````markdown
-Set your own local credentials once — they are stored outside the repository and are never committed:
-
-```bash
-dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Username" "<your-username>"
-dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Password" "<your-password>"
-```
-
-Open **http://localhost:5280/** and sign in with those credentials.
-````
-
-- [ ] **Step 5: Fix the README trust-boundary bullet**
-
-Replace:
-
-```markdown
-- **App credentials** (`Auth:Username` / `Auth:Password`) are used only for cookie authentication. Development defaults are `operator` / `rehearsal`.
-```
-
-with:
-
-```markdown
-- **App credentials** (`Auth:Username` / `Auth:Password`) are used only for cookie authentication. There are **no defaults** — set them via `dotnet user-secrets` locally, and via `Auth__Username` / `Auth__Password` app settings in Azure. A single shared credential is the whole authentication model; see [ADR 0003](docs/adr/0003-shared-cookie-authentication.md) for what that does and does not protect.
-```
-
-- [ ] **Step 6: Fix `web/README.md`**
-
-Replace:
-
-```markdown
-sign in with the development credentials from `appsettings.Development.json` (`operator` / `rehearsal`),
-```
-
-with:
-
-```markdown
-sign in with the credentials you set via `dotnet user-secrets` (see [CONTRIBUTING.md](../CONTRIBUTING.md)),
-```
-
-- [ ] **Step 7: Fix `docs/runbook.md` §6**
-
-Replace:
-
-```markdown
-Sign in with the development credentials `operator` / `rehearsal`, grant microphone permission, then hold **Hold to talk** or click a safe question.
-```
-
-with:
-
-```markdown
-Sign in with the credentials you configured via `dotnet user-secrets` (see [CONTRIBUTING.md](../CONTRIBUTING.md)), grant microphone permission, then hold **Hold to talk** or click a safe question.
-```
-
-- [ ] **Step 8: Fix `docs/config-schema.md`**
-
-Replace these two rows:
-
-```markdown
-| `Auth:Username` | string | Required | Development default: `operator` | App login username. Environment variable: `Auth__Username`. |
-| `Auth:Password` | string | Required | Development default: `rehearsal` | App login password. Environment variable: `Auth__Password`. |
-```
-
-with:
-
-```markdown
-| `Auth:Username` | string | Required | No default | App login username. Set via `dotnet user-secrets` locally, `Auth__Username` in Azure. |
-| `Auth:Password` | string | Required | No default | App login password. Set via `dotnet user-secrets` locally, `Auth__Password` in Azure. Never commit this value or store it in an App Service setting in production — see [`production-deployment.md`](production-deployment.md). |
-```
-
-- [ ] **Step 9: Run the credential tests**
-
-Run: `dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true --filter "FullyQualifiedName~DocumentationTests"`
-
-Expected: `Maintained_markdown_publishes_no_credential_literals` **PASS**, `Development_settings_carry_no_auth_section` **PASS**. `Every_docs_image_is_referenced_by_maintained_markdown` still fails (Task 17).
-
-`Maintained_markdown_has_no_broken_relative_links` will now **FAIL** on the two forward references added in Steps 5 and 6 — `docs/adr/0003-shared-cookie-authentication.md` (Task 18) and `CONTRIBUTING.md` (Task 20). This is expected and is exactly what the guard is for: it tracks the debt until those files land. Do not remove the links.
-
-- [ ] **Step 10: Run the full backend suite**
-
-Run: `dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true`
-
-Expected: all pre-existing tests pass. If `AuthTests` fails, it was depending on the committed development credentials — update it to set `Auth:Username` / `Auth:Password` explicitly via `TestAppFactory`'s `UseSetting`, matching how `ConfigDir` is already supplied.
-
-- [ ] **Step 11: Commit**
-
-```bash
-git add web/src/VoiceLive.Web/VoiceLive.Web.csproj web/src/VoiceLive.Web/appsettings.Development.json README.md web/README.md docs/runbook.md docs/config-schema.md
-git commit -m "docs: replace published credentials with user-secrets setup"
-```
+- [x] **Step 1: Enable user secrets on the web project**
+- [x] **Step 2: Remove the committed credentials**
+- [x] **Step 3: Verify the app now demands explicit credentials** — Build succeeded.
+- [x] **Step 4: Rewrite the README quickstart sign-in step**
+- [x] **Step 5: Fix the README trust-boundary bullet**
+- [x] **Step 6: Fix `web/README.md`**
+- [x] **Step 7: Fix `docs/runbook.md` §6**
+- [x] **Step 8: Fix `docs/config-schema.md`**
+- [x] **Step 9: Run the credential tests** — both new passes confirmed.
+- [x] **Step 10: Run the full backend suite** — 95 passed / 2 failed as expected.
+- [x] **Step 11: Commit**
 
 ---
 
