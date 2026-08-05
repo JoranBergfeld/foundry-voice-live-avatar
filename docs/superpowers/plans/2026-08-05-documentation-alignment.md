@@ -638,14 +638,14 @@ with:
 
 ```markdown
 - `session.json.voice.type` must be one of `azure-realtime-native`, `azure-standard`, or `openai`.
-- **Known trap:** startup validation currently also accepts the value `azure-custom`, but session creation always fails on it because no custom-voice endpoint id is configured. `/api/health` reports Healthy and every session fails at connect time. Do not use it. Tracked as finding H-03 in [`review-merged.md`](../review-merged.md).
+- **Known trap:** startup validation currently also accepts the value `azure-custom` even though session creation always fails on it, because no custom-voice endpoint id is configured. `/api/health` reports Healthy and every session fails at connect time. Do not use it. Tracked as finding H-03 in [`review-merged.md`](../review-merged.md).
 ```
 
 - [ ] **Step 3: Run the drift test**
 
 Run: `dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true --filter "FullyQualifiedName~Config_schema_documents_only_voice_types"`
 
-Expected: **PASS.** The test asserts `azure-custom` does not appear in a comma-separated allowed-values list; the prose warning above is not one, so it is permitted deliberately.
+Expected: **PASS.** The test fails only when the backticked literal sits in a comma-separated allowed-values list — that is, when the document contains `` `azure-custom`, `` or `` , `azure-custom` ``. The prose warning above is deliberately worded so the literal is **not** immediately followed by a comma, which is why it is permitted. If you reword that warning, keep that property or you will re-trip the test you are trying to satisfy.
 
 - [ ] **Step 4: Commit**
 
