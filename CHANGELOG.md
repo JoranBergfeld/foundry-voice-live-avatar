@@ -23,6 +23,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - Renamed `licence.md` to `LICENSE.md` so licence-detection tooling finds it.
 - Moved unmaintained material under `docs/history/`: `docs/initial-spec.md` is now `docs/history/initial-spec.md`, and `docs/superpowers/` is now `docs/history/superpowers/`. External links to the old paths will break.
 
+### Fixed
+- The `avatar-error` message shown to the operator claimed "the voice session continues without avatar video". Avatar audio rides the same WebRTC peer connection as the video, so it is lost too. The message now says so and points at the fallback plan.
+- `docs/runbook.md` and `docs/rehearsal-checklist.md` gave a local run command without `ConfigDir`, which starts the app unhealthy (`/api/health` returns 503).
+
 ### Removed
 - Published development credentials from `README.md`, `web/README.md`, `docs/runbook.md`, `docs/config-schema.md` and `appsettings.Development.json`; replaced with `dotnet user-secrets` instructions.
 - `agentVersion`, `conversationResumePolicy` and `groundingStrategy` from `config/agent.json` and the schema — no code reads them.

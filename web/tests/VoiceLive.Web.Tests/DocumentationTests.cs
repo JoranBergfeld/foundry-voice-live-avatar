@@ -483,4 +483,138 @@ public sealed class DocumentationTests
 
         return count;
     }
+
+    /// <summary>
+    /// Every documented invocation of the web project must set <c>ConfigDir</c>.
+    /// <para>
+    /// <c>dotnet run</c> sets the process working directory to the <em>project</em> directory
+    /// (<c>web/src/VoiceLive.Web</c>), not the invocation directory. The default
+    /// <c>VoiceLiveOptions.ConfigDir</c> is the relative string <c>"config"</c>, which therefore
+    /// resolves under the project directory, where no config exists. The app starts, reports five
+    /// "not found at config/..." errors, and <c>/api/health</c> returns 503.
+    /// </para>
+    /// <para>
+    /// This has been fixed three separate times in this repository, each time missing a sibling
+    /// copy of the same command. This test removes the possibility.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Documented_dotnet_run_commands_set_ConfigDir()
+    {
+        const string RunCommand = "dotnet run";
+        const string Project = "web/src/VoiceLive.Web";
+
+        var offenders = new List<string>();
+
+        foreach (var rel in MaintainedMarkdown())
+        {
+            var lines = File.ReadAllLines(Path.Combine(RepoRoot, rel));
+            string? openFence = null;
+
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                var fence = Regex.Match(line, @"^\s*(`{3,}|~{3,})");
+
+                if (fence.Success)
+                {
+                    var marker = fence.Groups[1].Value;
+                    if (openFence is null)
+                    {
+                        openFence = marker;
+                    }
+                    else if (marker[0] == openFence[0] && marker.Length >= openFence.Length)
+                    {
+                        openFence = null;
+                    }
+
+                    continue;
+                }
+
+                // Only shell commands count. Prose that *explains* the ConfigDir trap necessarily
+                // names both `dotnet run` and the project path, and must not be flagged.
+                if (openFence is null) continue;
+
+                if (!line.Contains(RunCommand, StringComparison.Ordinal)) continue;
+                if (!line.Contains(Project, StringComparison.Ordinal)) continue;
+                if (line.Contains("ConfigDir=", StringComparison.Ordinal)) continue;
+
+                offenders.Add($"{rel}:{i + 1}: {line.Trim()}");
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Documented `dotnet run --project " + Project + "` invocations that do not set ConfigDir. "
+                + "`dotnet run` sets the working directory to the project directory, so the default relative "
+                + "\"config\" path does not resolve: the app starts unhealthy and /api/health returns 503. "
+                + "Prefix the command with `ConfigDir=$(pwd)/config` and run it from the repository root:\n  "
+                + string.Join("\n  ", offenders));
+    }
+
+    /// <summary>
+    /// The server's own operator-facing strings must not claim a voice-only fallback either.
+    /// <para>
+    /// <c>Maintained_markdown_does_not_assert_a_working_voice_only_fallback</c> guards the docs, but
+    /// the string an operator actually reads when the avatar dies lives in the bridge and is
+    /// rendered verbatim by the client. That is the one place the claim must not survive: it is
+    /// read under pressure, at the moment of maximum consequence.
+    /// </para>
+    /// <para>
+    /// Ground truth: <c>handleAvatarError</c> closes the peer connection, and that connection
+    /// carries both the video and the audio transceiver. Avatar audio dies with the video.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Operator_facing_source_strings_do_not_assert_a_working_voice_only_fallback()
+    {
+        // Phrases that assert the session keeps working without the avatar. Each is a positive
+        // claim; the negated forms the docs use ("there is no voice-only fallback") do not match.
+        var forbidden = new[]
+        {
+            "voice session continues",
+            "session continues without avatar",
+            "continuing voice-only",
+            "continues voice-only",
+            "falls back to voice",
+        };
+
+        var sourceRoots = new[] { "web/src", "web/frontend/src" };
+        var offenders = new List<string>();
+
+        foreach (var sourceRoot in sourceRoots)
+        {
+            var dir = Path.Combine(RepoRoot, sourceRoot);
+            Assert.True(Directory.Exists(dir), $"Source root not found: '{dir}'. Update sourceRoots.");
+
+            var files = Directory
+                .EnumerateFiles(dir, "*.*", SearchOption.AllDirectories)
+                .Where(p => p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                         || p.EndsWith(".ts", StringComparison.OrdinalIgnoreCase))
+                .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                .Where(p => !p.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
+
+            foreach (var path in files)
+            {
+                var rel = Path.GetRelativePath(RepoRoot, path).Replace('\\', '/');
+                var lines = File.ReadAllLines(path);
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    foreach (var phrase in forbidden)
+                    {
+                        if (lines[i].Contains(phrase, StringComparison.OrdinalIgnoreCase))
+                        {
+                            offenders.Add($"{rel}:{i + 1}: {lines[i].Trim()}");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Source strings asserting the session survives an avatar failure. It does not: the browser closes "
+                + "the peer connection, which carries both the video and the audio transceiver, so avatar audio "
+                + "is lost with the video. Operator-facing text must say so and point at the fallback plan:\n  "
+                + string.Join("\n  ", offenders));
+    }
 }

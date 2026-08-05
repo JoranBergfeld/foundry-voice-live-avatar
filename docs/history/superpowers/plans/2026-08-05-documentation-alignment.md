@@ -2268,6 +2268,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - Renamed `licence.md` to `LICENSE.md` so licence-detection tooling finds it.
 - Moved unmaintained material under `docs/history/`: `docs/initial-spec.md` is now `docs/history/initial-spec.md`, and `docs/superpowers/` is now `docs/history/superpowers/`. External links to the old paths will break.
 
+### Fixed
+- The `avatar-error` message shown to the operator claimed "the voice session continues without avatar video". Avatar audio rides the same WebRTC peer connection as the video, so it is lost too. The message now says so and points at the fallback plan.
+- `docs/runbook.md` and `docs/rehearsal-checklist.md` gave a local run command without `ConfigDir`, which starts the app unhealthy (`/api/health` returns 503).
+
 ### Removed
 - Published development credentials from `README.md`, `web/README.md`, `docs/runbook.md`, `docs/config-schema.md` and `appsettings.Development.json`; replaced with `dotnet user-secrets` instructions.
 - `agentVersion`, `conversationResumePolicy` and `groundingStrategy` from `config/agent.json` and the schema — no code reads them.
@@ -2503,3 +2507,24 @@ Expected: exit 0. Only three non-documentation files changed (`.csproj`, `appset
 - `review-merged.md` retains pre-move paths and a credential literal. Correct for an immutable audit record; now explicitly labelled as such in the index.
 - Anchor fragments are not covered by `Maintained_markdown_has_no_broken_relative_links` (it strips `#…`). All currently resolve, verified by hand, but nothing keeps them resolving.
 - Removing the `docs/superpowers/` exclusion means a future plan written to that conventional path lands in the maintained set and will fail the credential-literal and link guards on contact. Loud, not silent.
+
+## Completion note — whole-branch review, 2026-08-05
+
+A final review of the complete `main...docs-alignment` diff looked for the one class of defect a per-task review structurally cannot see: **cross-document contradiction**. On every fact it stress-tested — concurrency cap, cookie lifetime and revocation, gated-mode defaults, avatar failure semantics, RBAC names and scopes, region, CI, status channels, wire discriminator and frame names — the set was already consistent. The defects it did find were all one shape: **a fix pass updated N-1 of N copies of the same fact.**
+
+**Fixed:**
+1. **(High) `docs/runbook.md` and `docs/rehearsal-checklist.md` gave a local run command without `ConfigDir`** — the two documents an operator holds on event day. The checklist then told the reader to check `/api/health`, which would have returned 503. The runbook's own 503 troubleshooting row did not mention `ConfigDir` either, so the operator was sent down a diagnostic path that could not find the cause. All three fixed.
+2. **(High) The server's `avatar-error` message contradicted the entire branch.** `VoiceLiveWebSocketBridge.cs:191` told the operator "The voice session continues without avatar video" — rendered verbatim on screen by `main.ts:419`. At the moment of maximum consequence the operator was being told the show could continue on audio, while every document told them to invoke the fallback plan. The log line said the same. Both corrected. This is a source change in a documentation branch, and it is justified: an operator-facing string *is* documentation, and it was the last surviving copy of the exact falsehood the branch existed to kill.
+3. **(Medium) `web/README.md` still pointed local credentials at `appsettings.Development.json`** — fixed 39 lines earlier in the same file, missed here.
+4. **(Medium) `docs/config-schema.md` advertised a development default for `VoiceLive:Endpoint`** that `Development_settings_carry_no_voicelive_endpoint` forbids.
+5. **(Low) The readiness gate under-scoped H-02** to `POST /login`, though the finding and the threat model both cover `/logout`, which is anonymous.
+6. **(Low) `README.md`'s opening paragraph** listed "Hold to talk, gated, or open-mic" as three modes; `gated` *is* Hold to talk, and `hybrid` was missing.
+7. **(Nav) `docs/README.md` was reachable only from `CONTRIBUTING.md`.** The index that establishes the reading order is now the first entry in the README's reference section.
+
+**Two new guards, both proven by mutation** (reintroduce the defect → red; restore → green):
+- `Documented_dotnet_run_commands_set_ConfigDir` — the reviewer's highest-value missing guard. This defect had been fixed three separate times, each time missing a sibling copy. Scoped to fenced code blocks so that prose *explaining* the trap is not flagged.
+- `Operator_facing_source_strings_do_not_assert_a_working_voice_only_fallback` — extends the voice-only rule past the `.md` boundary into `web/src` and `web/frontend/src`.
+
+**Final state: 103 passed / 0 failed / 103 total.** 13 documentation guards.
+
+**Known limitation, recorded deliberately:** the guards validate the *shape* of the documentation — links resolve, tables parse, images are used, specific historical falsehoods stay dead. Most quantitative claims (the concurrency cap of 2, the 8-hour sliding cookie, the 20-frame vocabulary, the CSP string, the six status channels) are warranted by a human having read the code once, and nothing will notice when that stops being true. `docs/wire-protocol.md` in particular claims authority over the frame vocabulary with no mechanism to keep it. A frame-vocabulary guard is the natural next one to write.

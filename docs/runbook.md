@@ -89,8 +89,10 @@ Model mode is the default and requires no model deployment. The bare model name 
 Run the web app locally from the repository root:
 
 ```bash
-dotnet run --project web/src/VoiceLive.Web
+ConfigDir=$(pwd)/config dotnet run --project web/src/VoiceLive.Web
 ```
+
+`ConfigDir` is required. `dotnet run` sets the working directory to the **project** directory, so without it the config files are not found and `/api/health` returns 503.
 
 Open one or two views — do **not** open all three simultaneously; the default session cap is **2 concurrent sessions** (`MaxConcurrentSessions`):
 
@@ -155,7 +157,7 @@ Failures are explicit and visible, not masked:
 | Symptom | Likely cause | Operator action |
 | --- | --- | --- |
 | Sign-in fails or session reports auth failure | Wrong app credentials, `az login` expired locally, wrong tenant/subscription, or missing RBAC | Check `Auth__Username` / `Auth__Password` in App Service settings; for local dev run `az login`, `az account set --subscription <subscription-id>`, and confirm the server identity has the recommended roles. |
-| `/api/health` returns 503 | Config failed to load or required app settings are missing | Check App Service settings for `VoiceLive__Endpoint`, `VoiceLive__ApiVersion`, `VoiceLive__Mode`, and auth settings; review Application Insights logs. |
+| `/api/health` returns 503 | Config failed to load or required app settings are missing | **Locally:** the most common cause is a missing `ConfigDir` — run from the repository root with `ConfigDir=$(pwd)/config`, because `dotnet run` sets the working directory to the project directory and the default relative `config` path does not resolve. **In Azure:** check App Service settings for `VoiceLive__Endpoint`, `VoiceLive__ApiVersion`, `VoiceLive__Mode`, and auth settings; review Application Insights logs. The health response names the specific failing key in both cases. |
 | No avatar video/audio in browser | Autoplay blocked, mic permission not granted, or WebRTC setup did not complete | Grant mic permission, click/press a control in the operator page. If the session closed, click **Reconnect** first (a reload is only needed if Reconnect fails). |
 | Avatar never appears; log shows `avatar_service_resource_exhausted` | The Voice Live resource has little or no avatar rendering quota (common on a freshly provisioned resource) | Request an avatar rendering quota increase for the resource via Azure support, or set `VoiceLive__Endpoint` to an avatar-enabled resource. **Note:** avatar audio is also lost when the avatar is unavailable (both ride the same WebRTC peer connection), so there is no voice-only fallback — invoke your fallback plan. |
 | Model mode unavailable or realtime model not found | Resource in a region without native realtime model support | Use `swedencentral`; West Europe is not sufficient for native `gpt-realtime`. |

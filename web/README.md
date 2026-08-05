@@ -61,7 +61,7 @@ MVP limitation: every browser tab opens its own `/ws/session`, which creates its
 
 ## Security
 
-Operators authenticate with ASP.NET Core cookie auth. Credentials come from `Auth:Username` / `Auth:Password` configuration (`Auth__Username` / `Auth__Password` environment variables or App Service app settings); local development credentials live in `web/src/VoiceLive.Web/appsettings.Development.json`. Unauthenticated HTML requests redirect to `/login`, while unauthenticated `/api/*` and `/ws/*` requests return 401.
+Operators authenticate with ASP.NET Core cookie auth. Credentials come from `Auth:Username` / `Auth:Password` configuration (`Auth__Username` / `Auth__Password` environment variables or App Service app settings); local development credentials come from `dotnet user-secrets` (see [CONTRIBUTING.md](../CONTRIBUTING.md)). `appsettings.Development.json` carries no `Auth` section, and a test enforces that. Unauthenticated HTML requests redirect to `/login`, while unauthenticated `/api/*` and `/ws/*` requests return 401.
 
 The browser never receives the Foundry endpoint or the Voice Live credential. `/ws/session` uses `DefaultAzureCredential` on the server, which becomes the App Service system-assigned managed identity in Azure.
 

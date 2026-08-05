@@ -6,7 +6,7 @@ The `/config` directory contains the web app's JSON config files. All values bel
 
 | Setting | Type | Required | Allowed values / default | Description |
 | --- | --- | --- | --- | --- |
-| `VoiceLive:Endpoint` | string | Required | Default development value points at the Foundry account endpoint | Voice Live account endpoint, e.g. `https://<account>.services.ai.azure.com`. Environment variable: `VoiceLive__Endpoint`. |
+| `VoiceLive:Endpoint` | string | Required | No default — set `VoiceLive__Endpoint` in the environment or via `dotnet user-secrets` | Voice Live account endpoint, e.g. `https://<account>.services.ai.azure.com`. Environment variable: `VoiceLive__Endpoint`. |
 | `VoiceLive:ApiVersion` | string | Required | Default: `2025-10-01` | Voice Live API version. Environment variable: `VoiceLive__ApiVersion`. |
 | `VoiceLive:Mode` | string | Required | `model`, `agent`; default: `model` | Session establishment mode. Environment variable: `VoiceLive__Mode`; `VOICELIVE_MODE` can also override it. |
 | `Auth:Username` | string | Required | No default | App login username. Set via `dotnet user-secrets` locally, `Auth__Username` in Azure. |

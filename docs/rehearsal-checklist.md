@@ -10,8 +10,9 @@
 - [ ] Confirm safe questions in `config/agent.json`.
 - [ ] Run the web app locally or confirm the deployed URL is available:
   ```bash
-  dotnet run --project web/src/VoiceLive.Web
+  ConfigDir=$(pwd)/config dotnet run --project web/src/VoiceLive.Web
   ```
+  > Run from the repository root. `ConfigDir` is required — `dotnet run` sets the working directory to the project directory, so without it the config files are not found and `/api/health` returns 503. `VoiceLive__Endpoint` and the operator credentials must also be set; see [CONTRIBUTING.md](../CONTRIBUTING.md).
 - [ ] Open `/?view=operator`, sign in, grant microphone permission, and ask a safe question with hold-to-talk.
 
 ## Event-day setup
@@ -19,9 +20,10 @@
 - [ ] Confirm local `az login` is still valid, or confirm the deployed App Service is healthy.
 - [ ] Start the local web app or open the deployed URL:
   ```bash
-  dotnet run --project web/src/VoiceLive.Web
+  ConfigDir=$(pwd)/config dotnet run --project web/src/VoiceLive.Web
   ```
-- [ ] Check health: `curl -s http://localhost:5280/api/health`.
+  > Run from the repository root. Omitting `ConfigDir` starts the app unhealthy.
+- [ ] Check health: `curl -s http://localhost:5280/api/health`. Expect `Healthy`; `Unhealthy` (HTTP 503) means config did not load — check `ConfigDir` and `VoiceLive__Endpoint` first.
 - [ ] Sign in with the configured operator credentials at `http://localhost:5280/login` or `<deployed-url>/login`.
   > **Why sign in first:** unauthenticated requests are redirected to `/login` with no `ReturnUrl`, so opening `/?view=operator` or `/?view=display` before sign-in silently discards the query string and lands you on `/login` instead. Sign in first; then navigate to the views.
 - [ ] After sign-in the browser lands on `/`. Navigate that tab to `/?view=operator` (operator view).

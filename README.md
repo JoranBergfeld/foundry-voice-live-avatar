@@ -10,7 +10,7 @@ A stage-ready conversational avatar built on [Microsoft Foundry Voice Live](http
 | `/?view=operator` | Operator console — session controls, transcript, tool events, diagnostics |
 | `/?view=display` | Dedicated display surface for secondary screens |
 
-By default the app runs in **model mode** using `gpt-realtime`. Optional **agent mode** uses a named Voice Live agent created in the Azure AI Foundry portal. Reliability features include manual turn gating (Hold to talk, gated, or open-mic), an operator-initiated **Reconnect** control on every view, health and error reporting at `/api/health`, and safe-question injection.
+By default the app runs in **model mode** using `gpt-realtime`. Optional **agent mode** uses a named Voice Live agent created in the Azure AI Foundry portal. Reliability features include manual turn gating (`gated` — Hold to talk — plus `open-mic` and `hybrid`), an operator-initiated **Reconnect** control on every view, health and error reporting at `/api/health`, and safe-question injection.
 
 ## Why this exists
 
@@ -173,7 +173,7 @@ Close these before an exposed deployment. IDs link to the finding detail in [`re
 | 3 | [**H-01**](review-merged.md#h-01--say-control-frame-is-an-unrestricted-prompt-injection-and-cost-channel--high) | Constrain the `say` control frame to a server-side allow-list, with a length cap and per-connection rate limit. Any authenticated client can currently make the avatar speak arbitrary text on stage. |
 | 4 | [**M-01**](review-merged.md#m-01--no-idle-or-absolute-session-timeout-capacity-gate-trivially-exhausted--high) | Add absolute and idle session timeouts. There is no timeout today, and the service bills per session-minute. |
 | 5 | [**M-02**](review-merged.md#m-02--auth__password-stored-as-a-plaintext-app-service-setting--high) | Move `Auth__Password` out of plaintext App Service settings into a Key Vault reference. |
-| 6 | [**H-02**](review-merged.md#h-02--no-csrfantiforgery-protection-on-post-login-and-post-logout--high) | Add antiforgery protection to `POST /login`. |
+| 6 | [**H-02**](review-merged.md#h-02--no-csrfantiforgery-protection-on-post-login-and-post-logout--high) | Add antiforgery protection to `POST /login` **and `POST /logout`**. `/logout` is currently anonymous, so a cross-site request can force an operator sign-out mid-show. |
 | 7 | [**H-05**](review-merged.md#h-05--avatar-autoplay-failure-destroys-the-session-in-unattended-views--mediumhigh) | Make blocked autoplay recoverable instead of terminating the session. |
 
 **Also required, and not covered by the code findings above:** decide the identity model (a single shared credential is the whole authentication story today), plan avatar-rendering quota ahead of the event, set up alerting on `/api/health`, and agree a rollback procedure. See [`docs/production-deployment.md`](docs/production-deployment.md).
@@ -395,6 +395,8 @@ README.md
 ```
 
 ## Reference documentation
+
+**Start at [docs/README.md](docs/README.md)** — the full documentation index, organised by what you are trying to do. The most-used documents:
 
 - [docs/runbook.md](docs/runbook.md) — deployment, environment variables, operations, troubleshooting
 - [docs/config-schema.md](docs/config-schema.md) — full config file schema and all fields

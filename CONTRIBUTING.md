@@ -70,6 +70,10 @@ Run the backend tests and the type check before opening a pull request. CI runs 
 - `Maintained_markdown_does_not_assert_a_working_voice_only_fallback` — no maintained file may claim voice continues when the WebRTC connection fails.
 - `Every_docs_image_is_referenced_by_maintained_markdown` — no orphaned image files under `docs/images/`.
 - `Maintained_markdown_tables_have_consistent_column_counts` — every GFM table row has the same number of columns (pipe characters in inline code must be escaped as `\|`).
+- `Documented_dotnet_run_commands_set_ConfigDir` — every `dotnet run --project web/src/VoiceLive.Web` invocation inside a fenced block sets `ConfigDir`. Without it the app starts unhealthy and `/api/health` returns 503.
+- `Operator_facing_source_strings_do_not_assert_a_working_voice_only_fallback` — the same voice-only rule, applied to `.cs` and `.ts` sources. The message an operator reads when the avatar fails must not claim the session survives.
+
+Two of these guard *sources*, not markdown: the voice-only claim must stay dead in the operator-facing strings under `web/src` and `web/frontend/src`, because that is the text read under pressure.
 
 **If a documentation test fails, the documentation is wrong** — or the code changed and the documentation did not. Fix the mismatch; do not weaken the test. Every one of these tests exists because a real defect shipped.
 
