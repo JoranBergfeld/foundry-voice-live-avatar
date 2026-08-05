@@ -13,6 +13,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - "Why this exists", "Non-goals", "Production readiness" and "Development" sections in the README.
 - `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`.
 - Automated documentation-drift tests (`web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`).
+- Documentation index organised by Diátaxis (`docs/README.md`).
 
 ### Changed
 - Corrected the reconnect claim: reconnection is operator-initiated, not automatic.
@@ -20,6 +21,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Described the actual Content-Security-Policy instead of calling it strict.
 - Reconciled RBAC role names against the role GUIDs in `infra/resources.bicep`.
 - Renamed `licence.md` to `LICENSE.md` so licence-detection tooling finds it.
+- Moved unmaintained material under `docs/history/`: `docs/initial-spec.md` is now `docs/history/initial-spec.md`, and `docs/superpowers/` is now `docs/history/superpowers/`. External links to the old paths will break.
 
 ### Removed
 - Published development credentials from `README.md`, `web/README.md`, `docs/runbook.md`, `docs/config-schema.md` and `appsettings.Development.json`; replaced with `dotnet user-secrets` instructions.

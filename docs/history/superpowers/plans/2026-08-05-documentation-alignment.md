@@ -8,7 +8,7 @@
 
 **Tech Stack:** Markdown, xUnit + .NET 10 (`web/tests/VoiceLive.Web.Tests`), `dotnet user-secrets`, GitHub community-health file conventions, Diátaxis documentation structure.
 
-**Source spec:** [`review-merged.md`](../../../review-merged.md) Part B, findings **D-01 … D-24**.
+**Source spec:** [`review-merged.md`](../../../../review-merged.md) Part B, findings **D-01 … D-24**.
 
 ---
 
@@ -2258,6 +2258,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - "Why this exists", "Non-goals", "Production readiness" and "Development" sections in the README.
 - `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`.
 - Automated documentation-drift tests (`web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`).
+- Documentation index organised by Diátaxis (`docs/README.md`).
 
 ### Changed
 - Corrected the reconnect claim: reconnection is operator-initiated, not automatic.
@@ -2265,6 +2266,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Described the actual Content-Security-Policy instead of calling it strict.
 - Reconciled RBAC role names against the role GUIDs in `infra/resources.bicep`.
 - Renamed `licence.md` to `LICENSE.md` so licence-detection tooling finds it.
+- Moved unmaintained material under `docs/history/`: `docs/initial-spec.md` is now `docs/history/initial-spec.md`, and `docs/superpowers/` is now `docs/history/superpowers/`. External links to the old paths will break.
 
 ### Removed
 - Published development credentials from `README.md`, `web/README.md`, `docs/runbook.md`, `docs/config-schema.md` and `appsettings.Development.json`; replaced with `dotnet user-secrets` instructions.
@@ -2308,7 +2310,13 @@ Create `docs/README.md`:
 ```markdown
 # Documentation
 
-Organised by what you are trying to do ([Diátaxis](https://diataxis.fr/)). Everything listed here is **maintained and warranted accurate against the current code**. Anything under `history/` is not.
+Organised by what you are trying to do ([Diátaxis](https://diataxis.fr/)).
+
+Documents fall into three categories:
+
+- **Maintained** — warranted accurate against the current code and covered by the drift tests in `web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`. Everything below except where noted.
+- **Point-in-time records** — accurate as of a stated commit, deliberately never updated. Marked as such in the tables below.
+- **History** — everything under [`history/`](history/). Not maintained, not tested, unsafe as reference.
 
 ## Get started
 
@@ -2331,7 +2339,8 @@ Organised by what you are trying to do ([Diátaxis](https://diataxis.fr/)). Ever
 |---|---|
 | [config-schema.md](config-schema.md) | You need a config field's type, requiredness, default or validation rule. |
 | [wire-protocol.md](wire-protocol.md) | You need the `/ws/session` endpoints, frames or payload shapes. Authoritative. |
-| [session-flow.md](session-flow.md) | You need the turn lifecycle, the six status indicators, or what a view can do. |
+| [session-flow.md](session-flow.md) | You need the turn lifecycle, the six status channels, or what a view can do. |
+| [../web/README.md](../web/README.md) | You need backend/frontend architecture detail, agent-mode setup, or the browser verification procedure. |
 
 ## Understand why
 
@@ -2339,7 +2348,15 @@ Organised by what you are trying to do ([Diátaxis](https://diataxis.fr/)). Ever
 |---|---|
 | [adr/](adr/README.md) | You want the reasoning behind an architectural choice, including rejected alternatives. |
 | [threat-model.md](threat-model.md) | You are assessing security posture or changing the deployment shape. |
-| [../review-merged.md](../review-merged.md) | You want the merged findings of two independent code reviews of commit `d5110dc`. |
+| [../review-merged.md](../review-merged.md) | You want the merged findings of two independent code reviews. **Point-in-time record of commit `d5110dc`** — it quotes defects that have since been fixed and paths that have since moved. Not maintained. |
+
+## Community and security
+
+| Document | Read it when |
+|---|---|
+| [SECURITY.md](../SECURITY.md) | Reporting a vulnerability. |
+| [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Engaging with the project community. |
+| [CHANGELOG.md](../CHANGELOG.md) | Reviewing what changed between versions. |
 
 ## History — not maintained
 
@@ -2473,3 +2490,16 @@ Expected: exit 0. Only three non-documentation files changed (`.csproj`, `appset
 4. `review-merged.md` contains stale `docs/superpowers/` and `docs/initial-spec.md` references — legitimate, as it is an excluded point-in-time review artifact.
 
 **Traceability table defects:** The table in the spec was written before Tasks 16, 17, 20 completed. The table is accurate for D-01–D-22 as shipped; D-23 and D-24 map correctly to Tasks 20 and 11/16 respectively. No finding IDs were invented.
+
+**Post-review fixes (applied after the Task 21 code review):**
+1. **`web/README.md` "Run locally" was broken** — it omitted `ConfigDir`, so the documented command started the app unhealthy with five `not found at config/...` errors and `/api/health` returning 503. This was finding D-15's defect class surviving into the final state; Tasks 14 and 20 had fixed `README.md`, `CONTRIBUTING.md` and `web/README.md:51`, but missed this one. Fixed and verified by execution: with `ConfigDir` the five config errors drop to zero, and with `VoiceLive__Endpoint` also set `/api/health` returns **HTTP 200 Healthy**.
+2. **`docs/README.md` asserted a blanket accuracy warranty over `review-merged.md`**, which is deliberately excluded from every drift test and is a point-in-time record of commit `d5110dc`. Replaced the binary maintained/history split with the three categories the codebase actually defines: maintained, point-in-time record, history.
+3. **`web/README.md` was absent from the index** despite being maintained, tested and substantive. Added to "Look something up".
+4. **This plan's own source-spec link broke in the move** — `../../../review-merged.md` resolved to the repo root from `docs/superpowers/plans/` but to `docs/` from `docs/history/superpowers/plans/`. Corrected to `../../../../review-merged.md`. (The remaining bare `review-merged.md` links in this file sit inside fenced blocks and resolve correctly from their *destination* files, not from here.)
+5. **`CHANGELOG.md` did not record its own project's final commit.** Added `docs/README.md` under Added and the `docs/history/` relocation under Changed — a path change that breaks external links is exactly what Changed is for.
+
+**Known residual debt (deliberate, recorded rather than hidden):**
+- `docs/history/initial-spec.md` §4 still says local credentials live in `appsettings.Development.json`, which Task 10 made false. Mitigated by its historical banner and its move out of the maintained set.
+- `review-merged.md` retains pre-move paths and a credential literal. Correct for an immutable audit record; now explicitly labelled as such in the index.
+- Anchor fragments are not covered by `Maintained_markdown_has_no_broken_relative_links` (it strips `#…`). All currently resolve, verified by hand, but nothing keeps them resolving.
+- Removing the `docs/superpowers/` exclusion means a future plan written to that conventional path lands in the maintained set and will fail the credential-literal and link guards on contact. Loud, not silent.

@@ -22,8 +22,10 @@ The endpoint list and the full `/ws/session` frame vocabulary — including payl
 From the repository root:
 
 ```bash
-dotnet run --project web/src/VoiceLive.Web
+ConfigDir=$(pwd)/config dotnet run --project web/src/VoiceLive.Web
 ```
+
+`ConfigDir` is required. `dotnet run` sets the app's working directory to the **project** directory (`web/src/VoiceLive.Web`), so the default relative `config` path does not resolve and the app starts unhealthy (`/api/health` returns 503). See the note under [How to verify in a browser](#how-to-verify-in-a-browser).
 
 Open `http://localhost:5280/` for the default fullscreen avatar landing screen, sign in with the credentials you set via `dotnet user-secrets` (see [CONTRIBUTING.md](../CONTRIBUTING.md)), grant microphone permission, then hold **Hold to talk**. The ⚙ gear (top-right) opens the operator/troubleshoot console (`?view=operator`) with status lines, transcript, and safe-question buttons.
 

@@ -1,6 +1,12 @@
 # Documentation
 
-Organised by what you are trying to do ([Diátaxis](https://diataxis.fr/)). Everything listed here is **maintained and warranted accurate against the current code**. Anything under `history/` is not.
+Organised by what you are trying to do ([Diátaxis](https://diataxis.fr/)).
+
+Documents fall into three categories:
+
+- **Maintained** — warranted accurate against the current code and covered by the drift tests in `web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`. Everything below except where noted.
+- **Point-in-time records** — accurate as of a stated commit, deliberately never updated. Marked as such in the tables below.
+- **History** — everything under [`history/`](history/). Not maintained, not tested, unsafe as reference.
 
 ## Get started
 
@@ -24,6 +30,7 @@ Organised by what you are trying to do ([Diátaxis](https://diataxis.fr/)). Ever
 | [config-schema.md](config-schema.md) | You need a config field's type, requiredness, default or validation rule. |
 | [wire-protocol.md](wire-protocol.md) | You need the `/ws/session` endpoints, frames or payload shapes. Authoritative. |
 | [session-flow.md](session-flow.md) | You need the turn lifecycle, the six status channels, or what a view can do. |
+| [../web/README.md](../web/README.md) | You need backend/frontend architecture detail, agent-mode setup, or the browser verification procedure. |
 
 ## Understand why
 
@@ -31,7 +38,7 @@ Organised by what you are trying to do ([Diátaxis](https://diataxis.fr/)). Ever
 |---|---|
 | [adr/](adr/README.md) | You want the reasoning behind an architectural choice, including rejected alternatives. |
 | [threat-model.md](threat-model.md) | You are assessing security posture or changing the deployment shape. |
-| [../review-merged.md](../review-merged.md) | You want the merged findings of two independent code reviews of commit `d5110dc`. |
+| [../review-merged.md](../review-merged.md) | You want the merged findings of two independent code reviews. **Point-in-time record of commit `d5110dc`** — it quotes defects that have since been fixed and paths that have since moved. Not maintained. |
 
 ## Community and security
 
