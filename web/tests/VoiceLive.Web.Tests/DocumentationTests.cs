@@ -213,4 +213,24 @@ public sealed class DocumentationTests
             "docs/config-schema.md documents agent.json keys that no code reads: " + string.Join(", ", documented) +
             ". The schema also promises they 'fail fast at startup', which is false.");
     }
+
+    [Fact]
+    public void Every_docs_image_is_referenced_by_maintained_markdown()
+    {
+        var root = RepoRoot;
+        var imagesDir = Path.Combine(root, "docs", "images");
+        if (!Directory.Exists(imagesDir)) return;
+
+        var corpus = string.Concat(MaintainedMarkdown().Select(rel => File.ReadAllText(Path.Combine(root, rel))));
+
+        var orphans = Directory
+            .EnumerateFiles(imagesDir)
+            .Select(Path.GetFileName)
+            .Where(name => name is not null && !corpus.Contains(name, StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(orphans.Count == 0,
+            "Unreferenced images in docs/images — wire them into a document or delete them:\n  "
+                + string.Join("\n  ", orphans));
+    }
 }
