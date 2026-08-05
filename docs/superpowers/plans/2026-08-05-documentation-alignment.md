@@ -1734,7 +1734,7 @@ The server holds all Azure credentials. It acquires a token via `DefaultAzureCre
 
 - The Foundry resource is never directly reachable by a client. Compromising the browser yields an app session, not Azure access.
 - The server is on the audio path for the uplink, so it must be sized for concurrent audio relay.
-- Local development needs a signed-in developer identity with the right roles — the most common first-run failure. See [`../production-deployment.md`](../production-deployment.md) §1.
+- Local development needs a signed-in developer identity with the right roles — the most common first-run failure. See [`../runbook.md`](../runbook.md) §4.
 ```
 
 - [ ] **Step 3: Create ADR 0002**
@@ -1752,7 +1752,7 @@ The avatar produces a video and audio stream. Relaying it through the app server
 
 ## Decision
 
-Avatar media uses WebRTC **directly between the browser and Azure**. The server relays only the SDP offer/answer and ICE configuration; once negotiated, media never touches the app.
+Avatar media uses WebRTC **directly between the browser and Azure**. The server relays only the SDP offer/answer and ICE configuration; once negotiated, media never touches the app. Frame payload shapes are documented in [`../wire-protocol.md`](../wire-protocol.md).
 
 ## Alternatives rejected
 
@@ -1763,7 +1763,7 @@ Avatar media uses WebRTC **directly between the browser and Azure**. The server 
 - Lowest achievable latency, and video quality is independent of app instance size — important, because the whole point is a believable on-stage presence.
 - **The venue's network must reach Azure directly over WebRTC.** Restrictive venue firewalls break the avatar while leaving the control plane working, which presents as a working session with no avatar video or audio. Test from the actual stage position on the actual network.
 - The server cannot observe, record or moderate avatar output. What Azure renders is what the audience sees.
-- `avatar-error` is a **media-plane failure**, not a session failure. `handleAvatarError` closes the `RTCPeerConnection`; both avatar video **and audio** are lost because both `recvonly` transceivers ride that single peer connection. The WebSocket, concurrency slot, microphone capture and transcripts survive, but the room receives no avatar output. A control-plane `error` ends the session entirely.
+- `avatar-error` is a **media-plane failure**, not a session failure. `handleAvatarError` closes the `RTCPeerConnection`; both avatar video **and audio** are lost because both `recvonly` transceivers ride that single peer connection. The WebSocket, concurrency slot, microphone capture and transcripts survive, but the room receives no avatar output. The failure mode is a working session with no avatar video or audio — the operator must invoke a fallback plan. A control-plane `error` ends the session entirely.
 ```
 
 - [ ] **Step 4: Create ADR 0003**
@@ -1792,8 +1792,8 @@ A single shared username and password, validated by app middleware, issuing an 8
 
 - **This is the entire authorization model.** The authorization middleware (`Program.cs`) checks only `ctx.User.Identity?.IsAuthenticated` — every authenticated user reaches every endpoint, including `say`, which puts arbitrary text in the avatar's mouth on stage (finding H-01).
 - No audit trail attributable to a person. "Who made it say that" has no answer.
-- **Revoking a session is not possible by changing credentials.** The authorization check does not re-validate credentials after sign-in. Changing the shared password or username does not invalidate live cookies — the 8-hour sliding window runs out regardless. The only revocation path is destroying the ASP.NET Data Protection key ring. On App Service, the key ring persists to `%HOME%\ASP.NET\DataProtection-Keys` (a network-backed share), so restarting the app does **not** revoke sessions; only destroying the key ring does.
-- Consequently the app is **not internet-facing**. Combine with App Service access restrictions so the shared credential only defends a network you already control.
+- **Revoking a session is not possible by changing credentials.** The authorization check does not re-validate credentials after sign-in. Changing the shared password or username does not invalidate live cookies, and because the 8-hour expiry is **sliding**, an active tab renews the cookie on each request and never ages out on its own. The only revocation path is destroying the ASP.NET Data Protection key ring. On App Service, the key ring persists to `%HOME%\ASP.NET\DataProtection-Keys` (a network-backed share), so restarting the app does **not** revoke sessions; only destroying the key ring does.
+- Consequently the app **must not be left internet-facing** — but nothing enforces that. `azd up` provisions a public App Service with no IP restrictions or VNet integration, so out of the box the shared password is the only access control. Adding App Service access restrictions is the operator's responsibility; see [`../production-deployment.md`](../production-deployment.md) §9.
 - Superseding this ADR with Entra ID is the single highest-value security change available.
 ```
 
@@ -1841,7 +1841,7 @@ Voice Live sessions bill per minute and consume avatar-rendering quota. Unbounde
 
 ## Decision
 
-An in-memory semaphore (`SessionGate`) caps concurrent sessions at `MaxConcurrentSessions`, default **2**, bound from `VoiceLiveOptions` (ASP.NET configuration). Connections beyond the cap have their WebSocket handshake accepted, then immediately receive a text error frame and the connection closes. Override via the `VoiceLive__MaxConcurrentSessions` app setting.
+An in-memory semaphore (`SessionGate`) caps concurrent sessions at `MaxConcurrentSessions`, default **2**, bound from `VoiceLiveOptions` (ASP.NET configuration). Connections beyond the cap have their WebSocket handshake accepted, then immediately receive a text error frame (`"The server is at capacity. Try again shortly."`) and the connection closes. Override the default via the `VoiceLive__MaxConcurrentSessions` app setting.
 
 ## Alternatives rejected
 

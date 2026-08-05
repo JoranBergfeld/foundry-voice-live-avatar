@@ -19,4 +19,4 @@ The server holds all Azure credentials. It acquires a token via `DefaultAzureCre
 
 - The Foundry resource is never directly reachable by a client. Compromising the browser yields an app session, not Azure access.
 - The server is on the audio path for the uplink, so it must be sized for concurrent audio relay.
-- Local development needs a signed-in developer identity with the right roles — the most common first-run failure. See [`../production-deployment.md`](../production-deployment.md) §1.
+- Local development needs a signed-in developer identity with the right roles — the most common first-run failure. See [`../runbook.md`](../runbook.md) §4.
