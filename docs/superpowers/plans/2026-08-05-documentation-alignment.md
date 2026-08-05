@@ -1480,6 +1480,18 @@ git commit -m "docs: add production deployment guide"
 
 ---
 
+**Shipped — spec defects corrected:**
+
+- **Defect 1 (§3 voice-only fallback):** Spec said avatar quota exhaustion "falls back to voice-only". False — `handleAvatarError` in `main.ts` closes the peer connection, ending both audio and video. Corrected to: "both audio and video are lost — there is no voice-only fallback".
+- **Defect 2 (§8 business-continuity avatar row):** Spec said "Voice-only mode already degrades automatically." False for the same reason. Rewrote: "`handleAvatarError` closes the peer connection; both audio and video are lost. This is not an automatic graceful degradation — it is a session failure."
+- **Defect 3 (§3 `MaxConcurrentSessions` location):** Spec said `config/session.json`. False — the setting is bound by `VoiceLiveOptions` and lives in `appsettings.json`; in Azure it is overridden via `VoiceLive__MaxConcurrentSessions` App Service application setting.
+- **Additional (§2 rotation):** Spec claimed changing `Auth:Username` invalidates cookies. False — the auth guard checks only `IsAuthenticated`, never the username against config. Corrected: only an app restart revokes sessions.
+- **Additional (§6 environments table):** `` `rehearsal` `` backtick-wrapped tripped the credential-literals guard. Changed to plain "rehearsal".
+
+**Tests: 98 passed / 2 failed / 100 total.** Failures remain `Every_docs_image_is_referenced_by_maintained_markdown` and `Maintained_markdown_has_no_broken_relative_links` (broken-link set matches expected).
+
+---
+
 ## Task 16: D-11, D-24 — one authoritative wire-protocol reference
 
 The endpoint table and frame vocabulary appear in three documents with no source of truth, and frame *shapes* are documented nowhere. Write the reference, then make the other documents link to it instead of restating it.

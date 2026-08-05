@@ -1,5 +1,7 @@
 # Foundry Voice Live Avatar Runbook
 
+> **Scope:** provisioning and **rehearsal**. For identity, secrets, capacity, cost, alerting, rollback and disaster recovery, see [`production-deployment.md`](production-deployment.md).
+
 ## 1. Overview
 
 This repository contains one operator-facing ASP.NET Core web app at [`web/`](../web/README.md). The app ships the `/config` directory, authenticates operators with app-level cookie auth, hosts the Voice Live session server-side, and bridges browser audio/control messages over `/ws/session`.
