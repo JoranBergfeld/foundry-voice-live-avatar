@@ -524,38 +524,34 @@ git commit -m "docs: correct reconnect claim to match manual Reconnect control"
 `docs/runbook.md` §7 says a blocked autoplay shows a banner asking the operator to interact. In `main.ts` any non-`AbortError` rejection from `play()` calls `disconnect()`, ending the whole Voice Live session. The runbook and `docs/rehearsal-checklist.md` currently contradict each other. (Code finding **H-05** will make this recoverable; this section then gets updated.)
 
 **Files:**
-- Modify: `docs/runbook.md` (§7 Avatar operation)
+- Modify: `docs/runbook.md` (§7 Avatar operation, §9 Failure handling, §10 Troubleshooting)
+- Modify: `docs/rehearsal-checklist.md` (During-show controls, Known limitations)
 
-- [ ] **Step 1: Replace the autoplay paragraph**
+- [x] **Step 1: Replace the autoplay paragraph** (`docs/runbook.md` §7)
 
-In `docs/runbook.md`, replace:
+Replaced the old paragraph (claiming a non-fatal banner) with three paragraphs that: (a) stress pre-arrival interaction, (b) name the `NotAllowedError` → `disconnect()` path and show the fatal banner text, and (c) call out the unattended display hazard and H-05. Recovery sentence adjusted from the spec's original ("reload the tab, interact with the page, and reconnect") to "click Reconnect (the click satisfies the browser gesture); reload only if Reconnect fails" — clicking Reconnect is itself a user gesture so a full reload is not required as the first step.
 
-```markdown
-Real browsers require a user gesture before video/audio autoplay. On the event machine, the operator must interact with the page: sign in, grant microphone permission, then hold to talk or click a safe question. If the browser blocks autoplay, the UI shows a clear banner asking the operator to interact with the page.
-```
-
-with:
-
-```markdown
-Real browsers require a user gesture before video/audio autoplay, and the avatar stream carries audio. On the event machine the operator must interact with the page **before** the avatar stream arrives: sign in, grant microphone permission, then hold to talk or click a safe question.
-
-**If the browser blocks autoplay, the session ends.** The app calls `play()` on an unmuted element; any rejection other than `AbortError` — including the `NotAllowedError` browsers raise for blocked autoplay — tears down the whole Voice Live session, not just the video. The UI then shows a fatal error banner reading "Browser blocked avatar playback…". Recovery is to reload the tab, interact with the page, and reconnect.
-
-This is most dangerous on `/?view=display`, which is designed to run unattended and offers no interaction affordance of its own. **Always click into a display screen once, before the audience is present.** Tracked as finding H-05 in [`review-merged.md`](../review-merged.md); once fixed, blocked autoplay will retry muted instead of ending the session and this section must be updated.
-```
-
-- [ ] **Step 2: Verify the two documents now agree**
+- [x] **Step 2: Verify the two documents now agree**
 
 Run: `grep -n "autoplay\|session has closed" docs/runbook.md docs/rehearsal-checklist.md`
 
 Expected: both files describe session termination on blocked autoplay; neither claims a non-fatal banner.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3 (carry-forward B1): Add Reconnect control to `docs/runbook.md` §9 Failure handling**
 
-```bash
-git add docs/runbook.md
-git commit -m "docs: correct autoplay behaviour — blocked playback ends the session"
-```
+Added a bullet after the error-banner bullet noting that a Reconnect button appears on every fatal disconnect, clicking it re-runs `start()` without a reload (preserving sign-in, mic grant, autoplay gesture), and is the first recovery action for a closed session.
+
+- [x] **Step 4 (carry-forward B2): Correct `docs/runbook.md` §10 Troubleshooting row**
+
+"No avatar video/audio in browser" — changed "reload the tab if the session closed" to "click Reconnect first; reload only if Reconnect fails".
+
+- [x] **Step 5 (carry-forward B3): Correct `docs/rehearsal-checklist.md` During-show controls**
+
+Changed "reload/restart the tab and repeat the setup interaction" to "click Reconnect to restore it; reload only if Reconnect fails".
+
+- [x] **Step 6 (carry-forward B4): Add unattended-display hazard to `docs/rehearsal-checklist.md` Known limitations**
+
+Added a new bullet: a `?view=display` screen that disconnects stays dead until a human clicks Reconnect; ensure a human is present to respond.
 
 ---
 

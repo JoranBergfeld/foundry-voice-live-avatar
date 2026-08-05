@@ -111,7 +111,11 @@ Known MVP limitation: each browser tab opens its own `/ws/session`, which create
 
 Media flows browser ↔ Azure over WebRTC; the server relays SDP and ICE. A headless browser E2E reached WebRTC `connected` state with video and audio tracks arriving, and the safe-question path produced streaming transcripts plus a completed response.
 
-Real browsers require a user gesture before video/audio autoplay. On the event machine, the operator must interact with the page: sign in, grant microphone permission, then hold to talk or click a safe question. If the browser blocks autoplay, the UI shows a clear banner asking the operator to interact with the page.
+Real browsers require a user gesture before video/audio autoplay, and the avatar stream carries audio. On the event machine the operator must interact with the page **before** the avatar stream arrives: sign in, grant microphone permission, then hold to talk or click a safe question.
+
+**If the browser blocks autoplay, the session ends.** The app calls `play()` on an unmuted element; any rejection other than `AbortError` — including the `NotAllowedError` browsers raise for blocked autoplay — tears down the whole Voice Live session, not just the video. The UI then shows a fatal error banner reading "Browser blocked avatar playback…". Recovery: click the **Reconnect** button (the click itself satisfies the browser gesture requirement and restarts the session); reload the tab only if reconnection still fails.
+
+This is most dangerous on `/?view=display`, which is designed to run unattended and offers no interaction affordance of its own. **Always click into a display screen once, before the audience is present.** Tracked as finding H-05 in [`review-merged.md`](../review-merged.md); once fixed, blocked autoplay will retry muted instead of ending the session and this section must be updated.
 
 ## 8. Agent mode
 
@@ -136,6 +140,7 @@ Failures are explicit and visible, not masked:
 - The server forwards fatal service errors to the browser as an `error` frame and closes the session.
 - Avatar rendering capacity/quota errors are non-fatal: the server sends an `avatar-error` frame and keeps the voice session running without avatar video.
 - The browser shows an error banner for fatal errors, or a non-fatal notice when only the avatar is unavailable.
+- On any fatal disconnect the browser shows a **Reconnect** button. Clicking it re-runs the full connection flow (`start()`), restoring the session without a tab reload — preserving the sign-in cookie, microphone grant, and any autoplay gesture already obtained. Use Reconnect as the first recovery action for a closed session; reload only if Reconnect fails.
 
 ## 10. Troubleshooting
 
@@ -143,7 +148,7 @@ Failures are explicit and visible, not masked:
 | --- | --- | --- |
 | Sign-in fails or session reports auth failure | Wrong app credentials, `az login` expired locally, wrong tenant/subscription, or missing RBAC | Check `Auth__Username` / `Auth__Password` in App Service settings; for local dev run `az login`, `az account set --subscription <subscription-id>`, and confirm the server identity has the recommended roles. |
 | `/api/health` returns 503 | Config failed to load or required app settings are missing | Check App Service settings for `VoiceLive__Endpoint`, `VoiceLive__ApiVersion`, `VoiceLive__Mode`, and auth settings; review Application Insights logs. |
-| No avatar video/audio in browser | Autoplay blocked, mic permission not granted, or WebRTC setup did not complete | Grant mic permission, click/press a control in the operator page, and reload the tab if the session closed. |
+| No avatar video/audio in browser | Autoplay blocked, mic permission not granted, or WebRTC setup did not complete | Grant mic permission, click/press a control in the operator page. If the session closed, click **Reconnect** first (a reload is only needed if Reconnect fails). |
 | Avatar never appears; log shows `avatar_service_resource_exhausted` | The Voice Live resource has little or no avatar rendering quota (common on a freshly provisioned resource) | Request an avatar rendering quota increase for the resource via Azure support, or set `VoiceLive__Endpoint` to an avatar-enabled resource. Voice continues to work without avatar. |
 | Model mode unavailable or realtime model not found | Resource in a region without native realtime model support | Use `swedencentral`; West Europe is not sufficient for native `gpt-realtime`. |
 | Agent mode unavailable | The configured Voice Live agent does not exist in the configured Foundry project | Use model mode, or create the Voice Live agent in the Azure AI Foundry portal and redeploy with `VOICELIVE_MODE=agent`. |

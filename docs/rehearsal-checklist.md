@@ -37,10 +37,11 @@
 - [ ] Use safe-question buttons to steer back to approved topics.
 - [ ] Use repeat to replay the last completed answer when needed.
 - [ ] Use barge-in/interrupt controls if the avatar needs to stop speaking.
-- [ ] If an avatar/session error appears, the session has closed; reload/restart the tab and repeat the setup interaction.
+- [ ] If an avatar/session error appears, the session has closed; click **Reconnect** to restore it (this preserves sign-in, mic permission, and autoplay gesture). Reload/restart the tab only if Reconnect fails.
 
 ## Known limitations to brief stakeholders
 
 - [ ] Each browser tab opens its own `/ws/session`; shared operator+display rooms are future work.
 - [ ] Agent mode is opt-in and requires a Voice Live agent created in the Azure AI Foundry portal.
 - [ ] Browsers require a user gesture before video/audio autoplay; the operator should sign in, grant mic permission, then press a control before showtime.
+- [ ] A `?view=display` screen that disconnects (e.g., from blocked autoplay or a network drop) stays in the disconnected state until a human clicks the **Reconnect** button. For an unattended display, ensure a human is present to respond if a disconnection occurs.
