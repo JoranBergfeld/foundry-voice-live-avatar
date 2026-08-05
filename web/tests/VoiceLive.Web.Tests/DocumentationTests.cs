@@ -223,10 +223,14 @@ public sealed class DocumentationTests
 
         var corpus = string.Concat(MaintainedMarkdown().Select(rel => File.ReadAllText(Path.Combine(root, rel))));
 
+        // Known limitation: two images with the same basename in different subdirectories are
+        // indistinguishable to the matcher; accepted because today all images are in one flat directory.
+        string[] imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"];
         var orphans = Directory
-            .EnumerateFiles(imagesDir)
-            .Select(Path.GetFileName)
-            .Where(name => name is not null && !corpus.Contains(name, StringComparison.Ordinal))
+            .EnumerateFiles(imagesDir, "*", SearchOption.AllDirectories)
+            .Where(f => imageExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+            .Where(f => !corpus.Contains(Path.GetFileName(f), StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
             .ToList();
 
         Assert.True(orphans.Count == 0,

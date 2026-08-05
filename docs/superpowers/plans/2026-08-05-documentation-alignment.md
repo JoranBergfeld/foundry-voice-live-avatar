@@ -438,10 +438,14 @@ Append inside the `DocumentationTests` class:
 
         var corpus = string.Concat(MaintainedMarkdown().Select(rel => File.ReadAllText(Path.Combine(root, rel))));
 
+        // Known limitation: two images with the same basename in different subdirectories are
+        // indistinguishable to the matcher; accepted because today all images are in one flat directory.
+        string[] imageExtensions = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"];
         var orphans = Directory
-            .EnumerateFiles(imagesDir)
-            .Select(Path.GetFileName)
-            .Where(name => name is not null && !corpus.Contains(name, StringComparison.Ordinal))
+            .EnumerateFiles(imagesDir, "*", SearchOption.AllDirectories)
+            .Where(f => imageExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+            .Where(f => !corpus.Contains(Path.GetFileName(f), StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
             .ToList();
 
         Assert.True(orphans.Count == 0,
@@ -454,7 +458,7 @@ Append inside the `DocumentationTests` class:
 
 Run: `dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true --filter "FullyQualifiedName~Every_docs_image_is_referenced"`
 
-Expected: **FAIL** listing three orphans: `voice_live_decision_points.png`, `voice_live_prewarm_connection_flow.png`, `voice_live_single_turn_flow.png`. Fixed in Task 15.
+Expected: **FAIL** listing three orphans as repo-relative paths: `docs/images/voice_live_decision_points.png`, `docs/images/voice_live_prewarm_connection_flow.png`, `docs/images/voice_live_single_turn_flow.png`. Fixed in Task 15.
 
 - [ ] **Step 3: Commit**
 
