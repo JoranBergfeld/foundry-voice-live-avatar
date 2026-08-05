@@ -1048,10 +1048,11 @@ In `web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`, before `Every_docs_ima
         //   • (no|not) immediately before the phrase, with optional markdown emphasis
         //     (*,**,`,_) between them — e.g. "no voice-only fallback",
         //     "there is no **voice-only fallback**", "not voice-only fallback"
-        //   • "does not exist", "is not implemented", or "possible" within 60 characters
+        //   • "does not exist" or "is not implemented" within 60 characters
         //     after the phrase — "does not exist"/"is not implemented" cover direct negations;
-        //     "possible" covers the canonical future-aspiration form "would make voice-only
-        //     fallback possible" (i.e. it doesn't exist yet but could be implemented)
+        //   • the canonical future-aspiration form "would make ... voice-only fallback
+        //     possible" — "would" is required, so a bare "voice-only fallback is possible"
+        //     still fails (it asserts the feature rather than deferring it)
         // A bare "known gap" elsewhere on the same line does NOT exempt: a markdown table
         // row where independent cells share one line could disarm the guard with two common
         // words that have nothing to do with the voice-only claim.
@@ -1065,11 +1066,12 @@ In `web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`, before `Every_docs_ima
         // Matches a negation in proximity to the trigger phrase:
         // Pattern A — negation before the phrase (optional markdown emphasis between them).
         // Pattern B — phrase followed by a post-phrase negation or qualifier within 60 chars
-        //             ("does not exist", "is not implemented", or "possible" — the last covers
-        //             "would make voice-only fallback possible", the canonical future-aspiration form).
+        //             ("does not exist" or "is not implemented"), or the aspirational
+        //             "would make ... voice-only fallback possible" (the "would" is mandatory).
         var negated = new Regex(
             @"(no|not)\s*[\*`_]*\s*voice[\-\s]only[\*`_\s]+fallback" +
-            @"|voice[\-\s]only[\*`_\s]+fallback.{0,60}(does\s+not\s+exist|is\s+not\s+implemented|\bpossible\b)",
+            @"|voice[\-\s]only[\*`_\s]+fallback.{0,60}(does\s+not\s+exist|is\s+not\s+implemented)" +
+            @"|\bwould\b.{0,40}voice[\-\s]only[\*`_\s]+fallback.{0,20}\bpossible\b",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
 
         var violations = MaintainedMarkdown()
@@ -1089,7 +1091,7 @@ In `web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`, before `Every_docs_ima
             "(no ResponseAudioDelta case in VoiceLiveWebSocketBridge.cs). " +
             "Do not assert it as a feature or design decision. " +
             "To exempt a correct line, use a negation marker ('no', 'not', 'does not exist', " +
-            "or 'is not implemented') in proximity to the phrase, or end with 'possible' for " +
+            "or 'is not implemented') in proximity to the phrase, or the aspirational " +
             "future-aspiration phrasing — e.g. 'no **voice-only fallback**', " +
             "'Voice-only fallback does not exist', or 'would make voice-only fallback possible'.\n  " +
             string.Join("\n  ", violations));
