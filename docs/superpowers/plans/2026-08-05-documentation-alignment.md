@@ -1723,7 +1723,7 @@ The browser needs a live Voice Live session. The simplest implementation mints a
 
 ## Decision
 
-The server holds all Azure credentials. It acquires a token via `DefaultAzureCredential` — a managed identity in Azure, developer credentials locally — opens the upstream Voice Live session itself, and relays control and audio frames to the browser over `/ws/session`. No token, key or connection string is ever sent to the browser.
+The server holds all Azure credentials. It acquires a token via `DefaultAzureCredential` — a managed identity in Azure, developer credentials locally — opens the upstream Voice Live session itself, and relays control frames and audio uplink (browser → Azure) over `/ws/session`. The server never sends audio to the browser; avatar audio and video reach the browser exclusively over WebRTC. No token, key or connection string is ever sent to the browser.
 
 ## Alternatives rejected
 
@@ -1761,9 +1761,9 @@ Avatar media uses WebRTC **directly between the browser and Azure**. The server 
 ## Consequences
 
 - Lowest achievable latency, and video quality is independent of app instance size — important, because the whole point is a believable on-stage presence.
-- **The venue's network must reach Azure directly over WebRTC.** Restrictive venue firewalls break the avatar while leaving the control plane working, which presents as a working session with no video. Test from the actual stage position on the actual network.
+- **The venue's network must reach Azure directly over WebRTC.** Restrictive venue firewalls break the avatar while leaving the control plane working, which presents as a working session with no avatar video or audio. Test from the actual stage position on the actual network.
 - The server cannot observe, record or moderate avatar output. What Azure renders is what the audience sees.
-- A separate failure domain: `avatar-error` is non-fatal and degrades to voice-only, while a control-plane `error` ends the session.
+- `avatar-error` is a **media-plane failure**, not a session failure. `handleAvatarError` closes the `RTCPeerConnection`; both avatar video **and audio** are lost because both `recvonly` transceivers ride that single peer connection. The WebSocket, concurrency slot, microphone capture and transcripts survive, but the room receives no avatar output. A control-plane `error` ends the session entirely.
 ```
 
 - [ ] **Step 4: Create ADR 0003**
@@ -1790,9 +1790,9 @@ A single shared username and password, validated by app middleware, issuing an 8
 
 ## Consequences
 
-- **This is the entire authorization model.** Every authenticated user reaches every endpoint, including `say`, which puts arbitrary text in the avatar's mouth on stage (finding H-01).
+- **This is the entire authorization model.** The authorization middleware (`Program.cs`) checks only `ctx.User.Identity?.IsAuthenticated` — every authenticated user reaches every endpoint, including `say`, which puts arbitrary text in the avatar's mouth on stage (finding H-01).
 - No audit trail attributable to a person. "Who made it say that" has no answer.
-- Revoking one person means changing the password for everyone, and the 8-hour cookie keeps working until it expires.
+- **Revoking a session is not possible by changing credentials.** The authorization check does not re-validate credentials after sign-in. Changing the shared password or username does not invalidate live cookies — the 8-hour sliding window runs out regardless. The only revocation path is destroying the ASP.NET Data Protection key ring. On App Service, the key ring persists to `%HOME%\ASP.NET\DataProtection-Keys` (a network-backed share), so restarting the app does **not** revoke sessions; only destroying the key ring does.
 - Consequently the app is **not internet-facing**. Combine with App Service access restrictions so the shared credential only defends a network you already control.
 - Superseding this ADR with Entra ID is the single highest-value security change available.
 ```
@@ -1812,7 +1812,7 @@ Behaviour comes from JSON files in `config/`. They could be watched and reloaded
 
 ## Decision
 
-Config is read and validated **once, at startup**. Invalid config does not crash the process — the app starts and reports the problem through `/api/health`. There is no file watcher and no reload endpoint.
+Config is read and validated **once, at startup**. A `WebConfigValidationException` during loading is caught; the app starts and reports the problem through `/api/health` (503 Unhealthy) rather than crashing. There is no file watcher and no reload endpoint.
 
 ## Alternatives rejected
 
@@ -1841,7 +1841,7 @@ Voice Live sessions bill per minute and consume avatar-rendering quota. Unbounde
 
 ## Decision
 
-An in-memory semaphore (`SessionGate`) caps concurrent sessions at `MaxConcurrentSessions`, default **2**. Connections beyond the cap are rejected at the WebSocket upgrade.
+An in-memory semaphore (`SessionGate`) caps concurrent sessions at `MaxConcurrentSessions`, default **2**, bound from `VoiceLiveOptions` (ASP.NET configuration). Connections beyond the cap have their WebSocket handshake accepted, then immediately receive a text error frame and the connection closes. Override via the `VoiceLive__MaxConcurrentSessions` app setting.
 
 ## Alternatives rejected
 
@@ -1853,7 +1853,7 @@ An in-memory semaphore (`SessionGate`) caps concurrent sessions at `MaxConcurren
 - **The cap does not survive scale-out.** N instances means N × `MaxConcurrentSessions`, silently — an operator scaling out to "add capacity" removes the control. Scale up, not out. Recorded in [`../production-deployment.md`](../production-deployment.md) §3.
 - The default of 2 matches the intended deployment: one operator view and one display view.
 - **Each browser tab is a session.** Opening a third tab is rejected, which surprises operators who expect tabs to share.
-- There is no session timeout (finding M-01), so a slot is held until the tab closes or the app restarts. The cap bounds concurrency, not duration.
+- There is no session timeout (finding M-01 — "No idle or absolute session timeout; capacity gate trivially exhausted"), so a slot is held until the tab closes or the app restarts. The cap bounds concurrency, not duration.
 ```
 
 - [ ] **Step 7: Create ADR 0006**
@@ -1871,7 +1871,7 @@ Voice Live features are not uniformly available across Azure regions, and the re
 
 ## Decision
 
-Deploy to `swedencentral`, the region supporting **native realtime voice, avatar rendering and agent mode together**. West Europe does not offer the full combination.
+Deploy to `swedencentral`, the region supporting **native realtime voice, avatar rendering and agent mode together**. This is pinned as the default in `infra/main.bicep`. West Europe does not offer the full combination.
 
 ## Alternatives rejected
 
@@ -1900,12 +1900,31 @@ Run: `dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true --filter "Full
 
 Expected: the `docs/adr/0003-…` and `docs/adr/0006-…` forward references now resolve. Only `CONTRIBUTING.md` (Task 20) and `docs/README.md` (Task 21) remain outstanding.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add docs/adr README.md
 git commit -m "docs: add architecture decision records"
 ```
+
+**Spec errors corrected during execution:**
+
+1. **ADR 0001:** "relays control and audio frames to the browser" was wrong. `PumpVoiceLiveUpdatesAsync` has no `ResponseAudioDelta` case and every send is `WebSocketMessageType.Text`. Rewritten to: "relays control frames and audio uplink (browser → Azure); avatar audio and video reach the browser exclusively over WebRTC."
+
+2. **ADR 0002:** Two errors corrected:
+   - "degrades to voice-only" — `handleAvatarError` calls `this.pc?.close()`, and both video and audio transceivers ride that one peer connection. Both avatar video and audio are lost. Rewritten to describe a media-plane failure with no audio fallback.
+   - "presents as a working session with no video" — it is no video and no audio. Fixed.
+
+3. **ADR 0003:** Revocation consequences were understated. Authorization surface is only `IsAuthenticated` (`Program.cs:93-110`). Changing credentials does not revoke live sessions. Data Protection is unconfigured → key ring at `%HOME%\ASP.NET\DataProtection-Keys` (network-backed) → restart does not revoke; only destroying the key ring does. Strengthened accordingly.
+
+4. **ADR 0004:** Confirmed consistent with settled text. Added explicit 503 status code. `WebConfigValidationException` is caught; app starts and reports via `/api/health` (503 Unhealthy).
+
+5. **ADR 0005:** Two errors corrected:
+   - "rejected at the WebSocket upgrade" — the WebSocket IS accepted first; then a text error frame is sent and the connection closes. Fixed to describe post-handshake rejection.
+   - `MaxConcurrentSessions` default comes from `VoiceLiveOptions` (ASP.NET configuration), not `config/`. Override via `VoiceLive__MaxConcurrentSessions`. Fixed.
+   - M-01 full title verified: "No idle or absolute session timeout; capacity gate trivially exhausted".
+
+6. **ADR 0006:** `swedencentral` default confirmed at `infra/main.bicep:5`. `DOTNETCORE|10.0` confirmed at `infra/main.bicep:24`. Added `infra/main.bicep` reference to the Decision section.
 
 ---
 
