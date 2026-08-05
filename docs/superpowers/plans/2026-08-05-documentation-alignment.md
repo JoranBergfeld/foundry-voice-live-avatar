@@ -2054,7 +2054,7 @@ git commit -m "docs: add threat model with explicit trust assumptions and accept
 
 ---
 
-## Task 20: D-23 — community-health files and the licence rename
+## Task 20: D-23 — community-health files and the licence rename ✅ DONE
 
 Four standard files are absent, and `licence.md` is not detected as a licence by GitHub's API, `dotnet pack` or SBOM tooling. `SECURITY.md` is the urgent one: this repository has two reviews finding Critical issues and no channel to report a vulnerability.
 
@@ -2062,19 +2062,39 @@ Four standard files are absent, and `licence.md` is not detected as a licence by
 - Create: `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`
 - Rename: `licence.md` → `LICENSE.md`
 
-- [ ] **Step 1: Rename the licence with history preserved**
+**Spec errors corrected:**
+
+1. **SECURITY.md Scope** — spec said *"the app is documented as not internet-facing"* as the out-of-scope basis. The settled wording (README.md, ADR 0003, production-deployment.md) is: *not internet-facing by intent, but `azd up` publishes a public App Service with no IP restrictions or VNet integration; restricting access is the operator's responsibility.* Fixed to match.
+
+2. **SECURITY.md SHA** — `d5110dc` confirmed valid: `review-merged.md:5` states *"Commit reviewed: d5110dc (docs: add MIT License file)"*. SHA retained.
+
+3. **CONTRIBUTING.md Node.js version** — spec said Node.js 20+. CI pins `node-version: 24`. Fixed to 24.
+
+4. **CONTRIBUTING.md test count** — spec said "90 tests". Actual total is 101. Removed hardcoded count; text now reads "no frontend build" without a number.
+
+5. **CONTRIBUTING.md dotnet run command** — spec omitted `--no-launch-profile`. Task 14 settled that this flag is mandatory. Fixed to `dotnet run --no-launch-profile --project web/src/VoiceLive.Web` with explanatory note.
+
+6. **CONTRIBUTING.md RBAC scopes** — spec said "Cognitive Services User and Foundry User on the Foundry resource" without scopes. Task 11 settled: `Cognitive Services User` on the **account**, `Foundry User` on the **project**. Fixed.
+
+7. **CONTRIBUTING.md Documentation is tested** — spec listed a vague summary. Fixed to enumerate all 11 real `[Fact]` methods from `DocumentationTests.cs`.
+
+8. **CONTRIBUTING.md Key Vault trap** — spec said "use Key Vault references in Azure" without the M-02 caveat. Added known-trap note: `Auth__Password` is overwritten on every `azd provision`; re-apply Key Vault reference after every provision. Cross-references `docs/production-deployment.md` §2.
+
+9. **CHANGELOG docs/README.md and docs/history/** — spec included these in Added. Neither exists yet (Task 21). Omitted.
+
+10. **CHANGELOG session-flow status indicators** — spec said "the six status indicators" with no names. Fixed to name all six: `connection`, `webrtc`, `microphone`, `turn`, `speech`, `avatar` (matching `docs/session-flow.md`).
+
+- [x] **Step 1: Rename the licence with history preserved**
 
 ```bash
 git mv licence.md LICENSE.md
 ```
 
-- [ ] **Step 2: Fix any references to the old filename**
+- [x] **Step 2: Fix any references to the old filename**
 
-Run: `grep -rn "licence.md" README.md web/README.md docs/ --include='*.md'`
+No references to `licence.md` found in `README.md`, `web/README.md` or `docs/`. Only review artifacts (`opus-review.md`, `review-merged.md`) and CHANGELOG body text, which are excluded from maintained markdown or are factually describing the rename. No updates needed.
 
-Update every hit to `LICENSE.md`. Expected after the update: no remaining references outside `docs/superpowers/`.
-
-- [ ] **Step 3: Create `SECURITY.md`**
+- [x] **Step 3: Create `SECURITY.md`**
 
 ```markdown
 # Security policy
@@ -2099,10 +2119,10 @@ Two independent security reviews of commit `d5110dc` are published in [`review-m
 
 In scope: authentication, authorization, credential handling, the `/ws/session` control protocol, config validation, and the deployment templates in `infra/`.
 
-Out of scope: Azure platform vulnerabilities (report to Microsoft), findings that require an already-compromised operator machine, and issues that depend on ignoring the documented deployment constraints — the app is documented as not internet-facing.
+Out of scope: Azure platform vulnerabilities (report to Microsoft), findings that require an already-compromised operator machine, and issues that depend on ignoring the documented deployment constraints — the app is **not internet-facing by intent, but `azd up` publishes a public App Service with no IP restrictions or VNet integration**. Nothing enforces that boundary; restricting network access is the operator's responsibility. See [Non-goals](README.md#non-goals) and `docs/adr/0003-shared-cookie-authentication.md`.
 ```
 
-- [ ] **Step 4: Create `CONTRIBUTING.md`**
+- [x] **Step 4: Create `CONTRIBUTING.md`**
 
 ````markdown
 # Contributing
@@ -2112,12 +2132,12 @@ Out of scope: Azure platform vulnerabilities (report to Microsoft), findings tha
 | Tool | Version | Needed for |
 |---|---|---|
 | .NET SDK | 10.0+ | Server build and tests |
-| Node.js | 20+ | Frontend build, type check, Playwright |
+| Node.js | 24 | Frontend build, type check, Playwright |
 | Python 3 | any | **The Playwright suite only** — `playwright.config.ts` shells out to `python3 -m http.server`. Tests fail confusingly without it. |
 | Azure CLI | latest | Local Azure auth via `DefaultAzureCredential` |
 | Azure Developer CLI (`azd`) | latest | Deployment |
 
-You also need an Azure identity holding **Cognitive Services User** and **Foundry User** on the Foundry resource. Without both, the app starts, `/api/health` reports Healthy, and every session fails with a `403`.
+You also need an Azure identity holding **Cognitive Services User** (on the Foundry **account**) and **Foundry User** (on the Foundry **project**). Without both, the app starts, `/api/health` reports Healthy, and every session fails with a `403`.
 
 ## Setup
 
@@ -2131,15 +2151,17 @@ az login
 dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Username" "<your-username>"
 dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Password" "<your-password>"
 
-dotnet run --project web/src/VoiceLive.Web
+dotnet run --no-launch-profile --project web/src/VoiceLive.Web
 ```
+
+`--no-launch-profile` is required: `launchSettings.json` pins port 5280 and overrides `ASPNETCORE_URLS`, which conflicts with the documented development port. Without the flag the documented URL does not match where the app listens.
 
 The frontend builds automatically as an MSBuild step. Pass `-p:SkipFrontendBuild=true` to skip it when you are only touching server code.
 
 ## Tests
 
 ```bash
-# Backend — 90 tests, no frontend build
+# Backend — no frontend build
 dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true
 
 # Frontend type check
@@ -2153,7 +2175,19 @@ Run the backend tests and the type check before opening a pull request. CI runs 
 
 ## Documentation is tested
 
-`web/tests/VoiceLive.Web.Tests/DocumentationTests.cs` fails the build when documentation drifts from the code: published credential literals, config-schema mismatches, `config/agent.json` keys nothing reads, unreferenced images, RBAC role names that disagree with `infra/resources.bicep`, and broken relative links.
+`web/tests/VoiceLive.Web.Tests/DocumentationTests.cs` fails the build when documentation drifts from the code. The full set of guards is:
+
+- `Maintained_markdown_has_no_broken_relative_links` — every relative link in maintained markdown resolves to an existing file.
+- `Maintained_markdown_publishes_no_credential_literals` — no committed secret or password literal in maintained markdown.
+- `Development_settings_carry_no_auth_section` — `appsettings.Development.json` must not contain an `Auth` section.
+- `Development_settings_carry_no_voicelive_endpoint` — `appsettings.Development.json` must not contain a `VoiceLive` endpoint.
+- `Config_schema_documents_only_voice_types_the_session_builder_supports` — only voice types the code actually builds are listed in the config schema.
+- `Agent_config_ships_no_keys_the_code_never_reads` — `config/agent.json` must not contain keys that no code path reads.
+- `Config_schema_documents_no_unimplemented_agent_keys` — the config schema must not document agent keys the code never reads.
+- `Documented_rbac_roles_match_the_bicep_role_assignments` — RBAC role names and GUIDs in maintained markdown must match `infra/resources.bicep`.
+- `Maintained_markdown_does_not_assert_a_working_voice_only_fallback` — no maintained file may claim voice continues when the WebRTC connection fails.
+- `Every_docs_image_is_referenced_by_maintained_markdown` — no orphaned image files under `docs/images/`.
+- `Maintained_markdown_tables_have_consistent_column_counts` — every GFM table row has the same number of columns (pipe characters in inline code must be escaped as `\|`).
 
 **If a documentation test fails, the documentation is wrong** — or the code changed and the documentation did not. Fix the mismatch; do not weaken the test. Every one of these tests exists because a real defect shipped.
 
@@ -2161,6 +2195,7 @@ Run the backend tests and the type check before opening a pull request. CI runs 
 
 - **Commits** follow [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `test:`, `refactor:`, `chore:`.
 - **Never commit credentials.** Use `dotnet user-secrets` locally and Key Vault references in Azure.
+  - **Known trap:** `infra/resources.bicep` writes `Auth__Password` as a plaintext app setting on every `azd provision`. Any provision after you set a Key Vault reference will overwrite it — re-apply the Key Vault reference and verify sign-in after every provision. See [`docs/production-deployment.md`](docs/production-deployment.md) §2.
 - **Update the documentation in the same commit as the behaviour change.** Documentation that describes intended-but-unimplemented behaviour is the specific defect this repository has already had to remediate at length.
 - **New security-relevant behaviour** should be reflected in [`docs/threat-model.md`](docs/threat-model.md); new architectural decisions get an ADR in [`docs/adr/`](docs/adr/README.md).
 
@@ -2169,7 +2204,7 @@ Run the backend tests and the type check before opening a pull request. CI runs 
 [`docs/README.md`](docs/README.md) indexes the maintained documentation.
 ````
 
-- [ ] **Step 5: Create `CODE_OF_CONDUCT.md`**
+- [x] **Step 5: Create `CODE_OF_CONDUCT.md`**
 
 ```markdown
 # Code of conduct
@@ -2195,7 +2230,7 @@ Maintainers may remove, edit or reject contributions that violate this code, and
 Adapted from the [Contributor Covenant](https://www.contributor-covenant.org/), version 2.1.
 ```
 
-- [ ] **Step 6: Create `CHANGELOG.md`**
+- [x] **Step 6: Create `CHANGELOG.md`**
 
 ```markdown
 # Changelog
@@ -2207,10 +2242,9 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Added
 - Production deployment guide covering identity, secrets, capacity, cost, observability, environments, rollback, DR, networking and data handling (`docs/production-deployment.md`).
 - Authoritative wire-protocol reference for `/ws/session`, including frame payload shapes (`docs/wire-protocol.md`).
-- Session flow document covering the turn lifecycle, the six status indicators and per-view journeys (`docs/session-flow.md`), which also gives the previously orphaned diagrams a home.
+- Session flow document covering the turn lifecycle, the six status channels (`connection`, `webrtc`, `microphone`, `turn`, `speech`, `avatar`) and per-view journeys (`docs/session-flow.md`), which also gives the previously orphaned diagrams a home.
 - Six architecture decision records (`docs/adr/`).
 - Threat model with explicit trust assumptions and accepted risks (`docs/threat-model.md`).
-- Documentation index (`docs/README.md`); agent process history relocated to `docs/history/`.
 - "Why this exists", "Non-goals", "Production readiness" and "Development" sections in the README.
 - `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`.
 - Automated documentation-drift tests (`web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`).
@@ -2229,21 +2263,20 @@ All notable changes to this project are documented here. The format follows [Kee
 - Point-in-time end-to-end test evidence from the runbook.
 ```
 
-- [ ] **Step 7: Verify community-health detection and links**
+- [x] **Step 7: Verify community-health detection and links**
 
-Run: `ls SECURITY.md CONTRIBUTING.md CODE_OF_CONDUCT.md CHANGELOG.md LICENSE.md`
+Verified: `ls SECURITY.md CONTRIBUTING.md CODE_OF_CONDUCT.md CHANGELOG.md LICENSE.md` — all five present.
 
-Expected: all five listed.
+Full suite: **Failed: 1, Passed: 100, Skipped: 0, Total: 101**. Only broken link is `CONTRIBUTING.md -> docs/README.md` (Task 21 forward reference, expected).
 
-Run: `dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true --filter "FullyQualifiedName~Maintained_markdown_has_no_broken_relative_links"`
-
-Expected: **PASS** — the last forward reference is resolved. One link, `docs/README.md` from `CONTRIBUTING.md`, is a forward reference to Task 21; if the test fails only on that, proceed to Task 21 and re-run.
-
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
-git add SECURITY.md CONTRIBUTING.md CODE_OF_CONDUCT.md CHANGELOG.md LICENSE.md README.md web/README.md docs/
-git commit -m "docs: add community-health files and rename licence.md to LICENSE.md"
+git add SECURITY.md CONTRIBUTING.md CODE_OF_CONDUCT.md CHANGELOG.md LICENSE.md docs/superpowers/plans/2026-08-05-documentation-alignment.md
+git commit -m "docs: add community-health files and rename licence.md to LICENSE.md
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+Copilot-Session: 74a61d1f-17e7-42cc-8135-7e78c446a579"
 ```
 
 ---
