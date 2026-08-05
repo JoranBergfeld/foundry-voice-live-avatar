@@ -559,6 +559,17 @@ Added a new bullet: a `?view=display` screen that disconnects stays dead until a
 
 - [x] **Fix MEDIUM — display-tab gesture step missing (rehearsal-checklist.md):** Added a new pre-show step immediately after opening the display view: click anywhere on the display screen once and confirm avatar video and audio arrive in that tab specifically. Scoped the existing operator-tab gesture step explicitly to the operator tab (the two controls referenced — safe-question buttons and hold-to-talk — only exist in the operator view). User activation is per-document; a gesture in the operator tab does not satisfy the display tab's autoplay requirement.
 
+- [x] **Fix HIGH (Finding A) — display-tab gesture step placed before sign-in (rehearsal-checklist.md:28):** The display-tab click/confirm step was above the "Sign in" step, making it unsatisfiable: `/?view=display` is auth-gated and redirects to `/login` for unauthenticated requests (confirmed by `AuthTests.Root_without_cookie_redirects_to_login`). Moved the display-tab gesture/confirm step to after sign-in. Added an explicit instruction to sign in in the display tab (on separate machine/browser) or reload after signing in (same profile). Made the separate-machine case explicit, as that is the normal venue setup.
+
+- [x] **Fix HIGH (Finding B) — "voice session still active, continue the show" is false (repo-wide):** `main.ts` puts video and audio recvonly transceivers on the same peer connection; `handleAvatarError` calls `this.pc?.close()`, destroying the only inbound media path. `VoiceLiveWebSocketBridge.cs` handles no `response.audio.delta` case and all outbound sends are `WebSocketMessageType.Text`; non-string frames are dropped by `main.ts:119`. When avatar fails, **both audio and video are lost — there is no voice-only fallback**. Corrected everywhere the false claim appeared:
+  - `README.md:13` — removed "voice-only fallback" from feature list
+  - `README.md:94` — replaced "session continues in voice-only mode" with accurate description
+  - `README.md:263` (failure table) — updated row to state audio is also lost
+  - `docs/runbook.md` §9 — replaced "keeps voice session running" with accurate description; added tracked finding note (H-07) linking to `review-merged.md` noting that forwarding `response.audio.delta` would make voice-only fallback real
+  - `docs/runbook.md` §10 (troubleshooting table) — updated `avatar_service_resource_exhausted` row to remove "Voice continues to work without avatar"
+  - `docs/rehearsal-checklist.md` — replaced "continue the show" with accurate fallback instruction
+  - **Note:** `main.ts:412` has a stale comment; it is out of scope (code change), flagged in report.
+
 ---
 
 ## Task 7: D-03 — remove the three unimplemented `agent.json` keys

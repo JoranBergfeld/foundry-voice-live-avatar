@@ -10,7 +10,7 @@ A stage-ready conversational avatar built on [Microsoft Foundry Voice Live](http
 | `/?view=operator` | Operator console — session controls, transcript, tool events, diagnostics |
 | `/?view=display` | Dedicated display surface for secondary screens |
 
-By default the app runs in **model mode** using `gpt-realtime`. Optional **agent mode** uses a named Voice Live agent created in the Azure AI Foundry portal. Reliability features include manual turn gating (Hold to talk, gated, or open-mic), an operator-initiated **Reconnect** control on every view, health and error reporting at `/api/health`, safe-question injection, and voice-only fallback when avatar capacity is unavailable.
+By default the app runs in **model mode** using `gpt-realtime`. Optional **agent mode** uses a named Voice Live agent created in the Azure AI Foundry portal. Reliability features include manual turn gating (Hold to talk, gated, or open-mic), an operator-initiated **Reconnect** control on every view, health and error reporting at `/api/health`, and safe-question injection.
 
 ## How it works
 
@@ -91,7 +91,7 @@ Open **http://localhost:5280/** and sign in with the development credentials `op
 curl -s http://localhost:5280/api/health; echo
 ```
 
-`DefaultAzureCredential` picks up your `az login` token locally and the system-assigned managed identity in Azure. If the token expires, restart the session; the credential refreshes automatically between sessions. If avatar capacity is unavailable the session continues in voice-only mode — the avatar video element is hidden and audio keeps working.
+`DefaultAzureCredential` picks up your `az login` token locally and the system-assigned managed identity in Azure. If the token expires, restart the session; the credential refreshes automatically between sessions. If avatar capacity is unavailable the server sends an `avatar-error` frame — **avatar audio is lost along with the video** (both ride the same WebRTC peer connection), so there is no voice-only fallback at this time. The operator must invoke a fallback plan (see [runbook §9](docs/runbook.md#9-failure-handling)).
 
 ## Deploy to Azure
 
@@ -260,7 +260,7 @@ Explicit failure modes:
 | Concurrency gate full | `error` frame "server is at capacity" |
 | Inbound message over 1 MiB | Session closed |
 | Voice Live service error | Sanitized `error` frame; session closed |
-| Avatar capacity unavailable | `avatar-error` frame; voice-only mode continues |
+| Avatar capacity unavailable | `avatar-error` frame; avatar video **and audio** are lost (both ride the same WebRTC peer connection); no voice-only fallback — operator must invoke fallback plan |
 
 Reconnection is **operator-initiated**: on disconnect every view reveals a **Reconnect** button; there is no automatic retry or backoff. Each browser tab opens an independent session with its own concurrency slot. Hosted tool calls may not produce a client-side tool event in all configurations.
 
