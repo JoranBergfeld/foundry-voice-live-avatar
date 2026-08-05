@@ -128,6 +128,26 @@ curl -s http://localhost:5280/api/health; echo
 
 `DefaultAzureCredential` picks up your `az login` token locally and the system-assigned managed identity in Azure. If the token expires, restart the session; the credential refreshes automatically between sessions. If avatar capacity is unavailable the server sends an `avatar-error` frame — **avatar audio is lost along with the video** (both ride the same WebRTC peer connection), so there is no voice-only fallback at this time. The operator must invoke a fallback plan (see [runbook §9](docs/runbook.md#9-failure-handling)).
 
+## Production readiness
+
+**Read this before exposing the app to any network you do not control.**
+
+As shipped, this application is built for a **rehearsed, operator-attended, single-event deployment on a trusted network**. Two independent security reviews of commit `d5110dc` ([`review-merged.md`](review-merged.md)) concluded it is not ready for untrusted or internet-facing users. Nothing about the deployment path below enforces that boundary — as noted in [Non-goals](#non-goals), `azd up` produces a public HTTPS endpoint protected by a single shared password.
+
+Close these before an exposed deployment. IDs link to the finding detail.
+
+| # | Finding | Required action |
+|---|---|---|
+| 1 | **C-02** | The committed credentials (`Auth` block) have been removed and moved to `dotnet user-secrets`. What remains: **rotate the `testlab-f` Azure AI Services resource** (`appsettings.Development.json` still names it) if it was ever a real endpoint. |
+| 2 | **C-01** | Configure `ForwardedHeadersOptions` with known proxies and partition the rate limiter on the validated client IP; today the per-IP limiter is bypassable by a forged header. |
+| 3 | **H-01** | Constrain the `say` control frame to a server-side allow-list, with a length cap and per-connection rate limit. Any authenticated client can currently make the avatar speak arbitrary text on stage. |
+| 4 | **M-01** | Add absolute and idle session timeouts. There is no timeout today, and the service bills per session-minute. |
+| 5 | **M-02** | Move `Auth__Password` out of plaintext App Service settings into a Key Vault reference. |
+| 6 | **H-02** | Add antiforgery protection to `POST /login`. |
+| 7 | **H-05** | Make blocked autoplay recoverable instead of terminating the session. |
+
+**Also required, and not covered by the code findings above:** decide the identity model (a single shared credential is the whole authentication story today), plan avatar-rendering quota ahead of the event, set up alerting on `/api/health`, and agree a rollback procedure. See [`docs/production-deployment.md`](docs/production-deployment.md).
+
 ## Deploy to Azure
 
 ```bash

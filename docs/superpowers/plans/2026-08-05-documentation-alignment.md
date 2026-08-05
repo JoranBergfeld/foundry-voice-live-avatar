@@ -1120,22 +1120,17 @@ The README currently walks a reader to a public HTTPS endpoint guarded by one sh
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: Insert the section immediately before "Deploy to Azure"**
+- [x] **Step 1: Insert the section immediately before "Deploy to Azure"**
 
-In `README.md`, insert directly above the `## Deploy to Azure` heading:
+In `README.md`, insert directly above the `## Deploy to Azure` heading.
 
-```markdown
-## Production readiness
+**Spec row 1 was stale — corrected during implementation.** The spec said row 1 should instruct removing committed credentials and moving to `dotnet user-secrets`. An earlier task in this plan already did that: the `Auth` block was removed from `appsettings.Development.json`, `UserSecretsId` was added to the `.csproj`, and the quickstart instructs `dotnet user-secrets set`. A guard test (`Development_settings_carry_no_auth_section`) keeps it that way. Publishing the old instruction would have told readers to do something already done, destroying trust. Row 1 was rewritten to reflect what genuinely remains: **rotate the `testlab-f` Azure AI Services resource** (still named in `appsettings.Development.json`) if it was ever a real endpoint. All other rows (2–7) were confirmed still open against the current code before publishing.
 
-**Read this before exposing the app to any network you do not control.**
-
-As shipped, this application is built for a **rehearsed, operator-attended, single-event deployment on a trusted network**. Two independent security reviews of commit `d5110dc` ([`review-merged.md`](review-merged.md)) concluded it is not ready for untrusted or internet-facing users. Nothing about the deployment path below enforces that boundary — `azd up` produces a public HTTPS endpoint protected by a single shared password.
-
-Close these before an exposed deployment. IDs link to the finding detail.
+Final table as inserted:
 
 | # | Finding | Required action |
 |---|---|---|
-| 1 | **C-02** | Remove committed credentials, move to `dotnet user-secrets` locally, and rotate the resource if the committed values were ever real. |
+| 1 | **C-02** | The committed credentials (`Auth` block) have been removed and moved to `dotnet user-secrets`. What remains: **rotate the `testlab-f` Azure AI Services resource** (`appsettings.Development.json` still names it) if it was ever a real endpoint. |
 | 2 | **C-01** | Configure `ForwardedHeadersOptions` with known proxies and partition the rate limiter on the validated client IP; today the per-IP limiter is bypassable by a forged header. |
 | 3 | **H-01** | Constrain the `say` control frame to a server-side allow-list, with a length cap and per-connection rate limit. Any authenticated client can currently make the avatar speak arbitrary text on stage. |
 | 4 | **M-01** | Add absolute and idle session timeouts. There is no timeout today, and the service bills per session-minute. |
@@ -1143,16 +1138,13 @@ Close these before an exposed deployment. IDs link to the finding detail.
 | 6 | **H-02** | Add antiforgery protection to `POST /login`. |
 | 7 | **H-05** | Make blocked autoplay recoverable instead of terminating the session. |
 
-**Also required, and not covered by the code findings above:** decide the identity model (a single shared credential is the whole authentication story today), plan avatar-rendering quota ahead of the event, set up alerting on `/api/health`, and agree a rollback procedure. See [`docs/production-deployment.md`](docs/production-deployment.md).
-```
-
-- [ ] **Step 2: Verify placement and the back-link from Task 12**
+- [x] **Step 2: Verify placement and the back-link from Task 12**
 
 Run: `grep -n "^## Production readiness\|^## Deploy to Azure\|#production-readiness" README.md`
 
 Expected: `## Production readiness` appears immediately before `## Deploy to Azure`, and the `#production-readiness` reference from the Non-goals section now has a matching heading.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add README.md
