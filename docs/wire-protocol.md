@@ -48,10 +48,10 @@ All are JSON text frames with a `t` discriminator.
 | Frame | Payload | Meaning |
 |---|---|---|
 | `ready` | `{ "t": "ready", "config": ReadyConfig, "iceServers": IceServer[] }` | Session established. Always the first frame. |
-| `user-transcript` | `{ "t": "user-transcript", "text": string, "final": boolean }` | Speech-to-text of the operator. `final: false` frames carry a delta that must be **appended** to the live transcript line; the `final: true` frame carries the complete transcript and **replaces** the accumulated text. |
+| `user-transcript` | `{ "t": "user-transcript", "text": string, "final": boolean }` | Speech-to-text of the operator. **Only emitted in `open-mic` and `hybrid` modes** — gated mode uses `NoTurnDetection` and `InputAudioTranscription` is never set (`SessionOptionsBuilder.cs:35-41`), so no transcript events fire. In open-mic/hybrid: `final: false` frames carry a delta that must be **appended** to the live transcript line; the `final: true` frame carries the complete transcript and **replaces** the accumulated text. |
 | `agent-transcript` | `{ "t": "agent-transcript", "text": string, "final": boolean }` | The avatar's response text; emitted from both audio-transcript and text-delta update paths. `final: false` frames carry a delta to append; `final: true` carries the complete text and replaces the accumulated line. |
-| `speech-started` | `{ "t": "speech-started" }` | Server-side VAD detected speech. |
-| `speech-stopped` | `{ "t": "speech-stopped" }` | Server-side VAD detected end of speech. |
+| `speech-started` | `{ "t": "speech-started" }` | Server-side VAD detected speech. **Only emitted in `open-mic` and `hybrid` modes** (gated uses `NoTurnDetection`). |
+| `speech-stopped` | `{ "t": "speech-stopped" }` | Server-side VAD detected end of speech. **Only emitted in `open-mic` and `hybrid` modes** (gated uses `NoTurnDetection`). |
 | `avatar-speaking` | `{ "t": "avatar-speaking" }` | Avatar audio playback began. |
 | `avatar-idle` | `{ "t": "avatar-idle" }` | Avatar finished speaking. |
 | `avatar-answer` | `{ "t": "avatar-answer", "sdp": string }` | WebRTC answer (SDP string decoded from the base64-wrapped JSON the service returns). The browser applies it as the remote description. |

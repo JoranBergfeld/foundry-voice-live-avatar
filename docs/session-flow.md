@@ -12,18 +12,21 @@ The browser holds no Azure credential at any point. The server acquires the toke
 
 ![Voice Live single turn flow](images/voice_live_single_turn_flow.png)
 
-In **gated** mode a turn is explicitly bracketed by the operator:
+> **Image note:** the diagram's "WS deltas" box is inaccurate. The WebSocket carries **text frames only** (transcripts, state, tool and error events); all avatar audio and video arrive over the WebRTC media plane. The WebSocket never forwards audio to the browser.
+
+In **gated** mode (the shipped default) a turn is explicitly bracketed by the operator:
 
 1. Operator presses **Hold to talk** → client sends `start-turn` and begins streaming microphone audio.
-2. Binary PCM16 frames flow while the button is held. Server-side VAD emits `speech-started` / `speech-stopped`.
-3. Interim `user-transcript` frames arrive with `final: false`; each interim chunk **appends** to the accumulating live text. When recognition is complete, one final frame arrives with `final: true` and **replaces** the accumulated text.
-4. Operator releases → client sends `end-turn` and stops streaming audio.
-5. The model responds: `agent-transcript` frames stream in, `avatar-speaking` fires when audio playback begins, avatar video and audio arrive over the WebRTC media plane.
-6. `avatar-idle` then `response-done` close the turn.
+2. Binary PCM16 frames flow while the button is held. Turn detection is `NoTurnDetection` in gated mode (`SessionOptionsBuilder.cs:71`): **no `speech-started`/`speech-stopped` events are emitted** and the server does not segment the audio by VAD.
+3. Operator releases → client sends `end-turn` and stops streaming audio. Because `InputAudioTranscription` is not set when `UsesTurnDetection` is false (`SessionOptionsBuilder.cs:35-41`), **no `user-transcript` frames are emitted in gated mode**.
+4. The model responds: `agent-transcript` frames stream in, `avatar-speaking` fires when audio playback begins, avatar video and audio arrive over the WebRTC media plane.
+5. `avatar-idle` then `response-done` close the turn.
 
-**Safe questions** (operator view only) skip steps 1–4: clicking one sends a single `say` frame and the flow resumes at step 5.
+In **`open-mic`** and **`hybrid`** modes (where `UsesTurnDetection` is true), the server emits `speech-started`/`speech-stopped` VAD events and `user-transcript` frames. `final: false` frames carry a delta that **appends** to the live transcript line; the `final: true` frame carries the complete transcript and **replaces** the accumulated text.
 
-**Barge-in** (operator view only) sends `barge-in` during step 5 to interrupt the avatar.
+**Safe questions** (operator view only) skip the turn steps above: clicking one sends a single `say` frame and the flow resumes at the model-response stage.
+
+**Barge-in** (operator view only) sends `barge-in` during model speech to interrupt the avatar.
 
 ### Turn-taking modes
 
@@ -37,8 +40,8 @@ The active mode is reported in the `ready` frame as `activeMode`. `wireInteracti
 
 ### Rules and edge cases
 
-- **Wait for `ready`.** Frames sent before it are not honoured.
-- **Mute** toggles microphone streaming (`streamingMic`) independently of the turn state. Muting mid-turn stops the audio byte stream without sending `end-turn`, so the model receives a truncated utterance.
+- **Wait for `ready`.** The client must not send anything before `ready`; the server does not enforce this gate, but frames sent in that window may be processed in undefined state.
+- **Mute** is available in `open-mic` and `hybrid` modes on the landing view only (`views.ts:336`, `main.ts:212-214`). It toggles microphone streaming (`streamingMic`) and is structurally impossible in gated mode or from the operator view. **There is no mute control on the operator view.**
 - **Barge-in outside avatar speech** is harmless but pointless — there is nothing to interrupt.
 - **`barge-in` and `say` are operator-view only.** The landing view wires neither; it has no `stopButton`, `repeatButton`, or `safeQuestionButtons`. See the per-view table in [`wire-protocol.md`](wire-protocol.md).
 
@@ -46,7 +49,12 @@ The active mode is reported in the `ready` frame as `activeMode`. `wireInteracti
 
 ![Voice Live decision points](images/voice_live_decision_points.png)
 
-The branch points that determine what an operator sees: model mode vs. agent mode, avatar capacity availability, and connection outcomes.
+> **Image note:** the connection-drop branch in this diagram depicts an automatic freeze-and-retry with a "Fallback video" path. **This is aspirational, not shipped.** The actual code performs full teardown and reveals a manual **Reconnect** button. There is no automatic reconnect loop and no fallback video asset in the repository.
+
+The diagram shows three decision paths:
+1. **Barge-in** (speech during avatar response) → check turn-taking config → cancel response (open-mic/hybrid) or ignore input (gated: reply finishes first).
+2. **Repeat request** → recall last reply text → re-synthesize.
+3. **Connection drop** (WebSocket or WebRTC) → **aspirational, not shipped**: the diagram depicts an automatic freeze-and-retry with a fallback-video branch; in the actual code, `disconnect()` performs full teardown (closes socket and peer connection, stops all tracks, calls `setDisconnected(true)`) and exposes a manual **Reconnect** button. There is no automatic reconnect, no freeze loop, and no fallback video asset. See line below and [`wire-protocol.md`](wire-protocol.md).
 
 ## Status channels
 
@@ -56,9 +64,9 @@ The operator view exposes six independent status channels. The landing view surf
 |---|---|---|
 | `connection` | `ready` (healthy); `connecting`; `connected; waiting for ready`; `disconnected` | WebSocket to the app is down. The **Reconnect** button appears; nothing else works until reconnected. |
 | `webrtc` | `connected` (healthy); `creating peer connection`; `offer sent; waiting for answer`; `failed`; `avatar disabled (capacity)` | Media-plane failure. Both avatar audio and video are lost because both transceivers ride the same peer connection — closing it ends all inbound media. **There is no voice-only fallback.** The WebSocket, microphone, and transcripts all survive; the room loses all audible output. See [runbook.md](runbook.md) §9. |
-| `microphone` | `ready` / `live` (healthy); `requesting permission`; `muted` | No audio input reaches the model. Safe questions still work in operator view. |
+| `microphone` | `ready` / `live` (healthy); `requesting permission`; `muted` | Microphone setup **failed fatally**: `prepareMicrophone` catches `getUserMedia` errors and calls `disconnect()`, which closes the WebSocket, stops all tracks, calls `setReady(false)` and `setDisconnected(true)`. Every button is disabled; **Reconnect** is the only recovery. `muted` (landing view, non-gated only) is non-fatal — mic streaming is paused but the session is alive. |
 | `turn` | `gated: hold to talk` / `open-mic: streaming continuously` (idle); `recording gated turn` (active) | Stuck on `recording gated turn` → a `start-turn` was never closed; release and re-press Hold to talk. |
-| `speech` | `started` / `stopped` | Server-side VAD. Never showing `started` while speaking → the microphone is muted or capturing silence. |
+| `speech` | `started` / `stopped` | Server-side VAD. **Only emitted in `open-mic` and `hybrid` modes** — gated mode uses `NoTurnDetection` and never emits these events. In open-mic/hybrid, never showing `started` while speaking → the microphone is muted or capturing silence. In gated mode this channel never leaves its initial state; that is normal, not a fault. |
 | `avatar` | `speaking` / `idle` (healthy); `unavailable` | `unavailable` means an `avatar-error` frame was received. Check the `webrtc` channel for details. |
 
 ## The three views
@@ -67,8 +75,8 @@ All three are the same app shell, selected by query string, and **each open tab 
 
 | View | URL | Microphone | Controls | Intended screen |
 |---|---|---|---|---|
-| Landing | `/` | Yes | Hold to talk (gated mode only); the ⚙ gear is the only route to the operator view | Setup and testing |
-| Operator | `/?view=operator` | Yes | Hold to talk, mute, safe questions, barge-in, all six status channels, Reconnect | The operator's laptop, never visible to the audience |
+| Landing | `/` | Yes | Hold to talk (gated mode only); mute toggle (non-gated modes only, same button); Reconnect (on disconnect); the ⚙ gear is the only route to the operator view | Setup and testing |
+| Operator | `/?view=operator` | Yes | Hold to talk (gated only), safe questions, barge-in, all six status channels, Reconnect. **No mute control** (`controls.append` in `views.ts:148` is `holdButton, stopButton, repeatButton, safeQuestionPanel`). | The operator's laptop, never visible to the audience |
 | Display | `/?view=display` | **No** | Avatar video only; Reconnect appears on disconnect | The stage screen |
 
 **Two consequences worth planning for:**
