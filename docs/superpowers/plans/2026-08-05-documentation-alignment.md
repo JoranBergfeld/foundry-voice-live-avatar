@@ -1119,24 +1119,39 @@ The README currently walks a reader to a public HTTPS endpoint guarded by one sh
 
 **Files:**
 - Modify: `README.md`
+- Modify: `web/src/VoiceLive.Web/appsettings.Development.json`
+- Modify: `web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`
+- Modify: `web/tests/VoiceLive.Web.Tests/TestAppFactory.cs`
 
 - [x] **Step 1: Insert the section immediately before "Deploy to Azure"**
 
 In `README.md`, insert directly above the `## Deploy to Azure` heading.
 
-**Spec row 1 was stale — corrected during implementation.** The spec said row 1 should instruct removing committed credentials and moving to `dotnet user-secrets`. An earlier task in this plan already did that: the `Auth` block was removed from `appsettings.Development.json`, `UserSecretsId` was added to the `.csproj`, and the quickstart instructs `dotnet user-secrets set`. A guard test (`Development_settings_carry_no_auth_section`) keeps it that way. Publishing the old instruction would have told readers to do something already done, destroying trust. Row 1 was rewritten to reflect what genuinely remains: **rotate the `testlab-f` Azure AI Services resource** (still named in `appsettings.Development.json`) if it was ever a real endpoint. All other rows (2–7) were confirmed still open against the current code before publishing.
+**Spec row 1 was stale — corrected during implementation.** The spec said row 1 should instruct removing committed credentials and moving to `dotnet user-secrets`. An earlier task in this plan already did that: the `Auth` block was removed from `appsettings.Development.json`, `UserSecretsId` was added to the `.csproj`, and the quickstart instructs `dotnet user-secrets set`. A guard test (`Development_settings_carry_no_auth_section`) keeps it that way. Publishing the old instruction would have told readers to do something already done, destroying trust. Row 1 was rewritten to reflect what genuinely remained: **rotate the `testlab-f` Azure AI Services resource** (still named in `appsettings.Development.json`) if it was ever a real endpoint. All other rows (2–7) were confirmed still open against the current code before publishing.
 
-Final table as inserted:
+**Post-commit review findings (addressed in a follow-up commit on the same branch):**
+
+Five review findings were identified against commit `e39e998`:
+
+- **Finding 1 (C-02 row 1, missing in-repo action):** `appsettings.Development.json` still committed the `VoiceLive:Endpoint` pointing to `testlab-f`, republishing the very hostname C-02 flags. Fix: removed the `VoiceLive` block from `appsettings.Development.json`, leaving only non-sensitive logging overrides (exactly as C-02 recommends). The quickstart already instructs `export VoiceLive__Endpoint=...`. `TestAppFactory` updated to supply a `.invalid` test endpoint so health/config tests remain green.
+- **Finding 2 (C-02 row 1, unexecutable action):** "Rotate the resource" is not executable — there are no credentials on `testlab-f` to rotate (`DefaultAzureCredential`/managed identity). Dropped from the row.
+- **Finding 3 (C-02 row 1, hostname published):** README re-published the `testlab-f` hostname as information disclosure. Fixed by removing the endpoint from the committed file and rewriting the row to not name the host.
+- **Finding 4 (gate does not gate):** `## Deploy to Azure` was reachable via anchor/sidebar without seeing the gate. Fixed by opening the section with a blockquote back-reference to `[Production readiness](#production-readiness)` before the code block.
+- **Finding 5 (false "IDs link to the finding detail." sentence):** IDs were bold text, not links. Fixed by replacing the sentence with "IDs link to the finding detail in [`review-merged.md`](review-merged.md)" and making each ID in the table a real Markdown link to the corresponding `### ID — …` anchor in `review-merged.md`.
+
+A guard test `Development_settings_carry_no_voicelive_endpoint` was added to `DocumentationTests.cs` to keep `appsettings.Development.json` free of a committed endpoint going forward. Test count: 100 total, 98 passed, 2 pre-existing failures (unchanged).
+
+Final table as shipped:
 
 | # | Finding | Required action |
 |---|---|---|
-| 1 | **C-02** | The committed credentials (`Auth` block) have been removed and moved to `dotnet user-secrets`. What remains: **rotate the `testlab-f` Azure AI Services resource** (`appsettings.Development.json` still names it) if it was ever a real endpoint. |
-| 2 | **C-01** | Configure `ForwardedHeadersOptions` with known proxies and partition the rate limiter on the validated client IP; today the per-IP limiter is bypassable by a forged header. |
-| 3 | **H-01** | Constrain the `say` control frame to a server-side allow-list, with a length cap and per-connection rate limit. Any authenticated client can currently make the avatar speak arbitrary text on stage. |
-| 4 | **M-01** | Add absolute and idle session timeouts. There is no timeout today, and the service bills per session-minute. |
-| 5 | **M-02** | Move `Auth__Password` out of plaintext App Service settings into a Key Vault reference. |
-| 6 | **H-02** | Add antiforgery protection to `POST /login`. |
-| 7 | **H-05** | Make blocked autoplay recoverable instead of terminating the session. |
+| 1 | [**C-02**](review-merged.md#c-02--working-credentials-committed-to-the-repository--critical) | The committed credentials (`Auth` block) have been removed and moved to `dotnet user-secrets`; `appsettings.Development.json` now carries non-sensitive logging overrides only. Operator obligation: if the Azure AI Services account named in the former endpoint was ever real and its name is sensitive, re-provision it. |
+| 2 | [**C-01**](review-merged.md#c-01--login-rate-limiter-bypassable-via-spoofed-x-forwarded-for--critical) | Configure `ForwardedHeadersOptions` with known proxies and partition the rate limiter on the validated client IP; today the per-IP limiter is bypassable by a forged header. |
+| 3 | [**H-01**](review-merged.md#h-01--say-control-frame-is-an-unrestricted-prompt-injection-and-cost-channel--high) | Constrain the `say` control frame to a server-side allow-list, with a length cap and per-connection rate limit. Any authenticated client can currently make the avatar speak arbitrary text on stage. |
+| 4 | [**M-01**](review-merged.md#m-01--no-idle-or-absolute-session-timeout-capacity-gate-trivially-exhausted--high) | Add absolute and idle session timeouts. There is no timeout today, and the service bills per session-minute. |
+| 5 | [**M-02**](review-merged.md#m-02--auth__password-stored-as-a-plaintext-app-service-setting--high) | Move `Auth__Password` out of plaintext App Service settings into a Key Vault reference. |
+| 6 | [**H-02**](review-merged.md#h-02--no-csrfantiforgery-protection-on-post-login-and-post-logout--high) | Add antiforgery protection to `POST /login`. |
+| 7 | [**H-05**](review-merged.md#h-05--avatar-autoplay-failure-destroys-the-session-in-unattended-views--mediumhigh) | Make blocked autoplay recoverable instead of terminating the session. |
 
 - [x] **Step 2: Verify placement and the back-link from Task 12**
 
@@ -1149,6 +1164,16 @@ Expected: `## Production readiness` appears immediately before `## Deploy to Azu
 ```bash
 git add README.md
 git commit -m "docs: add production-readiness gate before the deploy instructions"
+```
+
+- [x] **Step 4: Fix five review findings (follow-up commit)**
+
+```bash
+git add README.md web/src/VoiceLive.Web/appsettings.Development.json \
+  web/tests/VoiceLive.Web.Tests/DocumentationTests.cs \
+  web/tests/VoiceLive.Web.Tests/TestAppFactory.cs \
+  docs/superpowers/plans/2026-08-05-documentation-alignment.md
+git commit -m "fix(docs): address five review findings against e39e998 (C-02 endpoint removal, gate back-ref, ID links)"
 ```
 
 ---

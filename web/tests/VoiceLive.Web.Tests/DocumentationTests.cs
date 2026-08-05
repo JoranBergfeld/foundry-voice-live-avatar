@@ -146,6 +146,27 @@ public sealed class DocumentationTests
             "appsettings.Development.json must not contain an Auth section. Use `dotnet user-secrets` so credentials are never committed.");
     }
 
+    [Fact]
+    public void Development_settings_carry_no_voicelive_endpoint()
+    {
+        // C-02 (review-merged.md): the VoiceLive:Endpoint must come from the operator's environment
+        // (export VoiceLive__Endpoint=...) or user-secrets, not from a committed file that would
+        // hard-code a real hostname into the repository. A missing file fails loudly for the same
+        // reason as Development_settings_carry_no_auth_section.
+        var path = Path.Combine(RepoRoot, "web", "src", "VoiceLive.Web", "appsettings.Development.json");
+        Assert.True(
+            File.Exists(path),
+            $"appsettings.Development.json not found at '{path}'. The file must exist with only non-sensitive logging overrides.");
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+
+        Assert.False(
+            doc.RootElement.TryGetProperty("VoiceLive", out var vl) &&
+            vl.TryGetProperty("Endpoint", out var ep) &&
+            ep.GetString() is { Length: > 0 },
+            "appsettings.Development.json must not contain a VoiceLive:Endpoint value. " +
+            "Set it via `export VoiceLive__Endpoint=...` or `dotnet user-secrets set VoiceLive:Endpoint ...`.");
+    }
+
     private static string ConfigSchema() => File.ReadAllText(Path.Combine(RepoRoot, "docs", "config-schema.md"));
 
     // Keys with zero references anywhere in the codebase. Shipping or documenting them implies

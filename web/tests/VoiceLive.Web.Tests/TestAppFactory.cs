@@ -16,5 +16,8 @@ public sealed class TestAppFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConfigDir", RepoConfigDir);
         builder.UseSetting("Auth:Username", TestUsername);
         builder.UseSetting("Auth:Password", TestPassword);
+        // Supply a syntactically valid endpoint so health/config tests pass without
+        // a real Azure endpoint committed to the repo. Never use a real hostname here.
+        builder.UseSetting("VoiceLive:Endpoint", "https://test.voicelive.invalid");
     }
 }
