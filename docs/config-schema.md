@@ -71,9 +71,6 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 | --- | --- | --- | --- | --- |
 | `agentName` | string | Required for agent mode | Default: `company-direction-avatar` | Voice Live agent name. |
 | `agentProjectName` | string | Required for agent mode | Default: `proj-default` | Foundry agent project name (the short project name in the Foundry endpoint path, e.g. `proj-default`). |
-| `agentVersion` | string or null | Optional | Default: `null` | Optional pinned agent version. |
-| `conversationResumePolicy` | string | Required | `resume`, `fresh`; default: `resume` | Whether conversations resume or start fresh. |
-| `groundingStrategy` | string | Required | `pack`, `rag`, `both`; default: `pack` | Grounding source strategy. |
 | `safeQuestions` | string array | Required | Default: two configured fallback questions | Safe redirect questions the avatar can use. |
 | `safeQuestions[]` | string | Required | Defaults: `Let's refocus - what is our single most important priority this year?`, `What does this direction mean for our customers?` | Individual safe redirect question. |
 
@@ -103,9 +100,8 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 - `session.json.voice.type` must be one of `azure-realtime-native`, `azure-standard`, `azure-custom`, or `openai`.
 - `turntaking.json.activeMode` must be one of `open-mic`, `gated`, or `hybrid`, and the matching entry must exist in `modes`.
 - `agent.json.agentName` and `agent.json.agentProjectName` are required in agent mode.
-- `agent.json.groundingStrategy` must be one of `pack`, `rag`, or `both`.
-- `agent.json.conversationResumePolicy` must be one of `resume` or `fresh`.
-- Unknown values for `voice.type`, `turntaking.activeMode`, `agent.groundingStrategy`, or `agent.conversationResumePolicy` fail fast at startup.
+- Unknown values for `voice.type` or `turntaking.activeMode` fail fast at startup.
+- Keys not listed in this document are **ignored**, not rejected. Adding an undocumented key to a config file changes nothing and produces no warning.
 - `avatar.json.preview` is a local preview-avatar flag (required, boolean); preview avatars omit style and this field is not sent to Voice Live; missing, `null`, or non-boolean values are invalid.
 - `avatar.json.style` is required when `preview` is `false` and must not be present when `preview` is `true`; the presence of any `style` property alongside `preview: true` is rejected.
 - `avatar.json.customized` is not supported; the app always creates non-customized avatars regardless of config.
