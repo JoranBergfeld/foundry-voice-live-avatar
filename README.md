@@ -229,6 +229,8 @@ sequenceDiagram
     A-->>B: Forward Voice Live events to browser
 ```
 
+The turn lifecycle, the status channels and what each view can do are documented in [`docs/session-flow.md`](docs/session-flow.md).
+
 ## Architecture
 
 ### Application host and endpoints

@@ -1545,13 +1545,34 @@ Created `docs/wire-protocol.md` as the authoritative reference for `/ws/session`
 
 ## Task 17: D-07, D-08, D-09 — session flow, state model and view journeys
 
-Three orphaned diagrams already exist in `docs/images/` and, by their filenames, are exactly the three flows the documentation lacks. Give them a home, and add the turn lifecycle, the six status channels and the per-view journeys.
+**SHIPPED.** Created `docs/session-flow.md` and linked from `README.md` after the Session startup sequence diagram. All three orphaned images are now referenced. Test result: **100 passed / 1 failed / 101 total**. Remaining failure is `Maintained_markdown_has_no_broken_relative_links` with only the six permitted broken links.
+
+**Spec errors corrected (six):**
+
+1. **Voice-only fallback claim (three occurrences)** — spec asserted that `webrtc` failure is survivable and that voice may still work without video. Source: `handleAvatarError` in `main.ts` calls `this.pc?.close()`, closing the peer connection that carries both transceivers; both avatar audio and video are lost. There is no voice-only fallback. Document matches `docs/wire-protocol.md` and `docs/runbook.md §9` wording: "There is no voice-only fallback." The "Diagnostic shortcut" paragraph was removed entirely.
+
+2. **Inverted transcript semantics** — spec said interim frames are "replaced as recognition improves". Source: `views.ts:81-82`: `const transcriptText = final ? text : liveText[role] + text;` — interim chunks **append**; the final frame (which carries the complete transcript) **replaces**. Corrected to match `docs/wire-protocol.md`.
+
+3. **`open` literal** — spec listed mode as `open`. Source: `config/turntaking.json` and `main.ts:330` show the literal is `open-mic`. Corrected to `open-mic` throughout.
+
+4. **`barge-in` and `say` availability** — spec implied these were available from the landing view. Source: `main.ts:219,225` gates `barge-in` on `view.stopButton` and `say` on `view.repeatButton`/`view.safeQuestionButtons`; the landing view has none of these. Corrected: marked operator-view only, consistent with `wire-protocol.md` per-view table.
+
+5. **Status channel healthy values** — spec used fictional values (`idle/active`, `idle/detected`, `connected`). Source: `main.ts:406` and actual `setStatus` calls throughout. Documented the real string values emitted by the code.
+
+6. **Decision points diagram caption** — spec said "avatar enabled vs. voice-only". Removed; replaced with accurate description (model mode vs. agent mode, avatar capacity, connection outcomes).
+
+**Additional corrections:**
+- Dropped unverifiable claim that "`end-turn` without `start-turn` is a no-op" (client guards with `if (!this.streamingMic) return`).
+- `MaxConcurrentSessions` default of 2 verified in `appsettings.json` and `VoiceLiveOptions.cs`.
+- `SessionGate` singleton `SemaphoreSlim` verified in `SessionGate.cs` and `Program.cs`.
+- Autoplay wording taken verbatim from `runbook.md §7`.
+- README link inserted after the sequence diagram (the spec's "How it works" section is actually titled "Session startup").
 
 **Files:**
 - Create: `docs/session-flow.md`
 - Modify: `README.md`
 
-- [ ] **Step 1: Confirm the images are still there**
+- [x] **Step 1: Confirm the images are still there**
 
 Run: `ls docs/images/`
 
