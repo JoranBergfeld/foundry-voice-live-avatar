@@ -297,6 +297,54 @@ public sealed class DocumentationTests
     }
 
     [Fact]
+    public void Maintained_markdown_does_not_assert_a_working_voice_only_fallback()
+    {
+        // Voice-only fallback does not exist in this codebase:
+        //   - handleAvatarError (web/frontend/src/main.ts ~line 411) calls this.pc?.close(),
+        //     which closes the single WebRTC peer connection that carries both audio and video
+        //     recvonly transceivers — so audio is lost along with video.
+        //   - VoiceLiveWebSocketBridge.cs handles only AudioTranscriptDelta/Done (transcript
+        //     text); there is no ResponseAudioDelta case and every outbound send is
+        //     WebSocketMessageType.Text, which the client drops if non-string.
+        // The correct text in README.md and docs/runbook.md already says "no voice-only
+        // fallback" and runbook.md:143 calls it "a known gap, not a design decision".
+        // This claim has been introduced, removed, and nearly reintroduced — this guard
+        // prevents future drift.
+        //
+        // - **Known trap:** any line whose text *contains* "no voice-only fallback" is
+        //   the correct negation and is explicitly exempt. The guard fires only on lines
+        //   that mention "voice-only fallback" without that negation prefix — i.e., lines
+        //   that frame it as a feature or design decision.
+        var root = RepoRoot;
+        var violations = MaintainedMarkdown()
+            .SelectMany(rel =>
+            {
+                var lines = File.ReadAllLines(Path.Combine(root, rel));
+                return lines
+                    .Select((line, i) => (rel, line, i))
+                    .Where(x =>
+                    {
+                        if (!x.line.Contains("voice-only fallback", StringComparison.OrdinalIgnoreCase)) return false;
+                        // "no voice-only fallback" is the correct negated form — exempt.
+                        if (x.line.Contains("no voice-only fallback", StringComparison.OrdinalIgnoreCase)) return false;
+                        // Lines that explicitly call it a "known gap" are documenting its absence — exempt.
+                        if (x.line.Contains("known gap", StringComparison.OrdinalIgnoreCase)) return false;
+                        return true;
+                    });
+            })
+            .Select(x => $"{x.rel} line {x.i + 1}: {x.line.Trim()}")
+            .ToList();
+
+        Assert.True(violations.Count == 0,
+            "Voice-only fallback does not exist: handleAvatarError closes the peer connection " +
+            "(killing both audio and video), and the server never forwards audio to the browser " +
+            "(no ResponseAudioDelta case in VoiceLiveWebSocketBridge.cs). " +
+            "Do not assert it as a feature or design decision. " +
+            "Lines that say 'no voice-only fallback' are the correct form and are exempt.\n  " +
+            string.Join("\n  ", violations));
+    }
+
+    [Fact]
     public void Every_docs_image_is_referenced_by_maintained_markdown()
     {
         var root = RepoRoot;

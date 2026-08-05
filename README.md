@@ -12,6 +12,31 @@ A stage-ready conversational avatar built on [Microsoft Foundry Voice Live](http
 
 By default the app runs in **model mode** using `gpt-realtime`. Optional **agent mode** uses a named Voice Live agent created in the Azure AI Foundry portal. Reliability features include manual turn gating (Hold to talk, gated, or open-mic), an operator-initiated **Reconnect** control on every view, health and error reporting at `/api/health`, and safe-question injection.
 
+## Why this exists
+
+This avatar converses **on stage with a C-level leader**, explaining company direction to a live audience, in a room that may be noisy. That single scenario, not a general chatbot use case, drives every design decision here.
+
+**Reliability and rehearsability beat features.** Anything that can fail mid-show needs a defined behaviour and an operator control. The consequences run through the whole codebase:
+
+| Decision | Because |
+|---|---|
+| Hold-to-talk turn gating is the default | An open microphone in a noisy room triggers on audience noise. The operator decides when the avatar listens. |
+| Safe questions are one click away | If live Q&A stalls, the operator injects a known-good prompt rather than improvising. |
+| Deep noise suppression and server-side VAD | Stage audio is hostile. |
+| Failures are explicit, never masked | A silent retry on stage is indistinguishable from a hang. Every failure surfaces in the operator view with an action. |
+| A dedicated operator view, separate from the display view | The audience must never see diagnostics. |
+| A written rehearsal checklist | The show is rehearsed, so the software must be too. |
+
+## Non-goals
+
+Stating these plainly, because the architecture only makes sense against them:
+
+- **Not multi-tenant and not multi-user.** Authentication is one shared username and password. Everyone who signs in is the same principal, and there is no per-operator identity, audit trail, or authorization model.
+- **Not internet-facing.** See [Production readiness](#production-readiness) below before exposing this to an untrusted network.
+- **Not a persistent assistant.** There is no conversation storage, no cross-session memory, and no user profile.
+- **Not horizontally scalable as configured.** The concurrency cap is a per-instance in-memory gate; scaling out multiplies it rather than sharing it.
+- **One session per browser tab.** Opening the operator and display views simultaneously consumes two of the two available session slots.
+
 ## How it works
 
 ```mermaid

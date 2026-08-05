@@ -1,5 +1,7 @@
 # Voice Live Avatar — Project Specification
 
+> **Status: historical.** This is the original design specification, retained for context. It records intent at the time of writing and is **not** maintained against the current implementation. For behaviour that is warranted accurate, see the [project README](../README.md). The use case and design rationale in §1 have been promoted to the [project README](../README.md#why-this-exists).
+
 **Status:** Current architecture after App Service managed-identity consolidation
 **Owner:** Joran
 **Primary audience of this document:** Coding agent and human reviewers

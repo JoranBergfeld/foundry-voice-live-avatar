@@ -975,8 +975,15 @@ The repository's best rationale is buried in a file the README itself labels "or
 **Files:**
 - Modify: `README.md`
 - Modify: `docs/initial-spec.md`
+- Modify: `web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`
 
-- [ ] **Step 1: Insert a "Why this exists" section**
+**Known spec defect — resolved:** The original Step 1 table included a row:
+`| Voice-only fallback when avatar capacity is unavailable | A missing video stream degrades the show; a failed session ends it. |`
+This is **false**. `handleAvatarError` in `web/frontend/src/main.ts` (~line 411) calls `this.pc?.close()`, closing the single WebRTC peer connection that carries both audio and video recvonly transceivers — so audio is lost along with video. Additionally, `VoiceLiveWebSocketBridge.cs` handles only `AudioTranscriptDelta`/`Done` (transcript text); there is no `ResponseAudioDelta` case and every outbound send is `WebSocketMessageType.Text`. The correct text in `README.md:104`, `README.md:281`, `docs/runbook.md:143`, `docs/runbook.md:154` already says "no voice-only fallback". **The row was dropped.**
+
+**Known spec defect — resolved:** Step 2's blockquote linked to `(README.md)` (relative from `docs/`), which resolves to `docs/README.md` — a file that does not exist. Fixed to `(../README.md)`.
+
+- [x] **Step 1: Insert a "Why this exists" section**
 
 In `README.md`, immediately after the opening paragraph and before the "How it works" section, insert:
 
@@ -991,7 +998,6 @@ This avatar converses **on stage with a C-level leader**, explaining company dir
 |---|---|
 | Hold-to-talk turn gating is the default | An open microphone in a noisy room triggers on audience noise. The operator decides when the avatar listens. |
 | Safe questions are one click away | If live Q&A stalls, the operator injects a known-good prompt rather than improvising. |
-| Voice-only fallback when avatar capacity is unavailable | A missing video stream degrades the show; a failed session ends it. |
 | Deep noise suppression and server-side VAD | Stage audio is hostile. |
 | Failures are explicit, never masked | A silent retry on stage is indistinguishable from a hang. Every failure surfaces in the operator view with an action. |
 | A dedicated operator view, separate from the display view | The audience must never see diagnostics. |
@@ -1008,24 +1014,79 @@ Stating these plainly, because the architecture only makes sense against them:
 - **One session per browser tab.** Opening the operator and display views simultaneously consumes two of the two available session slots.
 ```
 
-- [ ] **Step 2: Mark the spec as historical**
+- [x] **Step 2: Mark the spec as historical**
 
 At the very top of `docs/initial-spec.md`, immediately under the H1 heading, insert:
 
 ```markdown
-> **Status: historical.** This is the original design specification, retained for context. It records intent at the time of writing and is **not** maintained against the current implementation. For behaviour that is warranted accurate, see [`docs/README.md`](README.md). The use case and design rationale in §1 have been promoted to the [project README](../README.md#why-this-exists).
+> **Status: historical.** This is the original design specification, retained for context. It records intent at the time of writing and is **not** maintained against the current implementation. For behaviour that is warranted accurate, see the [project README](../README.md). The use case and design rationale in §1 have been promoted to the [project README](../README.md#why-this-exists).
 ```
 
-- [ ] **Step 3: Verify the anchor targets exist**
+- [x] **Step 3: Add guard test**
+
+In `web/tests/VoiceLive.Web.Tests/DocumentationTests.cs`, before `Every_docs_image_is_referenced_by_maintained_markdown`, insert:
+
+```csharp
+[Fact]
+public void Maintained_markdown_does_not_assert_a_working_voice_only_fallback()
+{
+    // Voice-only fallback does not exist in this codebase:
+    //   - handleAvatarError (web/frontend/src/main.ts ~line 411) calls this.pc?.close(),
+    //     which closes the single WebRTC peer connection that carries both audio and video
+    //     recvonly transceivers — so audio is lost along with video.
+    //   - VoiceLiveWebSocketBridge.cs handles only AudioTranscriptDelta/Done (transcript
+    //     text); there is no ResponseAudioDelta case and every outbound send is
+    //     WebSocketMessageType.Text, which the client drops if non-string.
+    // The correct text in README.md and docs/runbook.md already says "no voice-only
+    // fallback" and runbook.md:143 calls it "a known gap, not a design decision".
+    // This claim has been introduced, removed, and nearly reintroduced — this guard
+    // prevents future drift.
+    //
+    // - **Known trap:** any line whose text *contains* "no voice-only fallback" is
+    //   the correct negation and is explicitly exempt. Lines that contain "known gap"
+    //   are documenting the absence of the feature and are also exempt. The guard fires
+    //   only on lines that mention "voice-only fallback" without either exemption — i.e.,
+    //   lines that frame it as a feature or design decision.
+    var root = RepoRoot;
+    var violations = MaintainedMarkdown()
+        .SelectMany(rel =>
+        {
+            var lines = File.ReadAllLines(Path.Combine(root, rel));
+            return lines
+                .Select((line, i) => (rel, line, i))
+                .Where(x =>
+                {
+                    if (!x.line.Contains("voice-only fallback", StringComparison.OrdinalIgnoreCase)) return false;
+                    // "no voice-only fallback" is the correct negated form — exempt.
+                    if (x.line.Contains("no voice-only fallback", StringComparison.OrdinalIgnoreCase)) return false;
+                    // Lines that explicitly call it a "known gap" are documenting its absence — exempt.
+                    if (x.line.Contains("known gap", StringComparison.OrdinalIgnoreCase)) return false;
+                    return true;
+                });
+        })
+        .Select(x => $"{x.rel} line {x.i + 1}: {x.line.Trim()}")
+        .ToList();
+
+    Assert.True(violations.Count == 0,
+        "Voice-only fallback does not exist: handleAvatarError closes the peer connection " +
+        "(killing both audio and video), and the server never forwards audio to the browser " +
+        "(no ResponseAudioDelta case in VoiceLiveWebSocketBridge.cs). " +
+        "Do not assert it as a feature or design decision. " +
+        "Lines that say 'no voice-only fallback' are the correct form and are exempt.\n  " +
+        string.Join("\n  ", violations));
+}
+```
+
+- [x] **Step 4: Verify the anchor targets exist**
 
 Run: `grep -n "^## Why this exists\|^## Non-goals\|^## Production readiness" README.md`
 
 Expected: `Why this exists` and `Non-goals` are present. `Production readiness` is added in Task 13 — the `#production-readiness` link in Step 1 is a deliberate forward reference and will resolve then. (The link test only checks file targets, not anchors, so it stays green.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
-git add README.md docs/initial-spec.md
+git add README.md docs/initial-spec.md web/tests/VoiceLive.Web.Tests/DocumentationTests.cs
 git commit -m "docs: promote the use case, design rationale and non-goals into the README"
 ```
 
