@@ -1298,8 +1298,7 @@ Create `docs/production-deployment.md`:
 
 ## 2. Secrets
 
-**Never** set the operator password with `azd env set AUTH_PASSWORD <password>` for a production deployment. That lands the sole credential in plaintext App Service configuration, readable by anyone with Reader on the resource.
-
+**Never** set the operator password with `azd env set AUTH_PASSWORD <password>` for a production deployment. That lands the sole credential in plaintext App Service configuration, readable by anyone with Contributor or Website Contributor on the resource (any principal holding `Microsoft.Web/sites/config/list/action`).
 Use a Key Vault reference instead:
 
 ```bash
@@ -1311,7 +1310,9 @@ az webapp config appsettings set --name <app> --resource-group <rg> --settings \
 
 The web app's system-assigned managed identity needs **Key Vault Secrets User** on the vault. Verify resolution before the event — a failed reference surfaces as the literal `@Microsoft.KeyVault(...)` string becoming the password, so **sign in successfully after every secret change**.
 
-**Rotation.** Rotate after every event and whenever anyone with the credential leaves the team. Rotation is a secret update plus an app restart; sessions signed in with the old cookie survive up to 8 hours because the cookie is self-contained and is not revoked by a password change. If you need immediate revocation, restart the app *and* change `Auth:Username`, which invalidates the cookie's identity.
+**Rotation.** Rotate after every event and whenever anyone with the credential leaves the team. Rotation is a secret update. Sessions signed in with the old cookie remain valid because the cookie is a self-contained Data Protection payload, and neither a password nor a username change revokes any active session. **There is no immediate revocation mechanism in the application.** To force all sessions to drop, destroy the key ring (`%HOME%/ASP.NET/DataProtection-Keys` via Kudu/SSH) and restart.
+
+**Key Vault reference ordering.** The `Auth__Password` application setting is also written on every `azd provision`, sourced from `AUTH_PASSWORD`. Any `azd up` or `azd provision` run after setting the Key Vault reference will overwrite it. Re-apply the Key Vault reference and re-verify sign-in after every provision. For a first deployment, `AUTH_PASSWORD` must be non-empty so the app starts with a valid credential; replace it with the Key Vault reference immediately after provision.
 
 **Never** commit credentials. `appsettings.Development.json` no longer carries an `Auth` section, and a test enforces that.
 
@@ -1321,15 +1322,15 @@ Three independent limits, in the order you will hit them:
 
 | Limit | Value | Behaviour when exceeded | Where to change |
 |---|---|---|---|
-| Concurrent app sessions | `MaxConcurrentSessions`, default **2** | New connections are rejected at the gate | `config/session.json` |
-| Avatar rendering quota | Per Azure AI Foundry resource | `avatar_service_resource_exhausted`; the app falls back to voice-only | Azure quota request |
+| Concurrent app sessions | `MaxConcurrentSessions`, default **2** | New connections are rejected at the gate | `VoiceLive__MaxConcurrentSessions` App Service application setting (overrides the `appsettings.json` default) |
+| Avatar rendering quota | Per Azure AI Foundry resource | `avatar_service_resource_exhausted`; the peer connection closes and **both audio and video are lost — there is no voice-only fallback** | Azure quota request |
 | App Service instance | B1, single instance | CPU saturation and dropped audio | App Service plan |
 
 **The concurrency gate is per-instance and in-memory.** Scaling out to N instances does not share the cap — it multiplies it to N × `MaxConcurrentSessions`, silently. **Do not scale out to increase capacity.** Scale up instead, and raise `MaxConcurrentSessions` deliberately, having tested the instance can carry the load.
 
 **Each browser tab is a session.** An operator view plus a display view is two sessions — the entire default budget. Plan the slot count against the number of tabs you will actually open, plus one spare for a mid-show reconnect.
 
-**Request avatar quota before the event, not on the day.** Quota approval is not instant, and the failure mode is silent degradation to voice-only, which is exactly the outcome the avatar exists to avoid.
+**Request avatar quota before the event, not on the day.** Quota approval is not instant, and the failure mode is a media-plane failure — the peer connection closes and the avatar goes dark, while the WebSocket session, microphone and transcripts keep running.
 
 ## 4. Cost
 
@@ -1354,7 +1355,7 @@ Application Insights and Log Analytics are provisioned, and the app emits OpenTe
 |---|---|---|
 | Health degraded | `/api/health` availability test, non-200 for 2 consecutive minutes | Catches invalid config and lost RBAC before showtime |
 | Session start failures | Exception rate on the session-start path > 0 over 5 minutes | The `403`/`429`/quota failures that end a show |
-| Capacity rejections | Gate-rejection count > 0 | Someone opened one tab too many |
+| Capacity rejections | `voicelive.active_sessions` sustained at `MaxConcurrentSessions` | Someone opened one tab too many (gate-rejection metric is not yet emitted — M-01 remediation) |
 | Instance health | CPU > 80% for 5 minutes | B1 saturation drops audio |
 
 Useful Log Analytics queries:
@@ -1371,7 +1372,7 @@ AppRequests
 | where TimeGenerated > ago(6h) and Url endswith "/api/health"
 | summarize count() by ResultCode, bin(TimeGenerated, 15m)
 
-// Avatar quota exhaustion — the silent degrade to voice-only
+// Avatar quota exhaustion — both audio and video are lost when this fires
 AppTraces
 | where TimeGenerated > ago(24h) and Message has "avatar_service_resource_exhausted"
 | project TimeGenerated, Message
@@ -1403,11 +1404,12 @@ The most important production procedure, and the fastest.
 
 ```bash
 # List recent deployments, newest first
-az webapp deployment list --name <app> --resource-group <rg> \
+az webapp log deployment list --name <app> --resource-group <rg> \
   --query "[].{id:id, time:received_time, active:active}" -o table
 
-# Roll back to a previous deployment
-az webapp deployment source config-zip --name <app> --resource-group <rg> --src <previous.zip>
+# Roll back by re-deploying a retained artifact (deployment id is for correlation/audit only;
+# no slot-swap rollback is available — the B1 plan cannot host staging slots)
+az webapp deploy --name <app> --resource-group <rg> --src-path <previous.zip> --type zip
 ```
 
 **Prepare a rollback before the event:** keep the last known-good published artifact, and record its deployment id in the event runbook. Mid-show is not when you discover the artifact is gone.
@@ -1421,7 +1423,7 @@ The whole project exists to serve one high-stakes live moment, so plan for the r
 | Scenario | Prepared fallback |
 |---|---|
 | Foundry region degraded | Pre-provision a second `azd` environment in an alternate region **that supports native realtime voice, avatar and agent mode**. Verify it during rehearsal — an untested standby is not a standby. |
-| Avatar quota exhausted | Voice-only mode already degrades automatically. Brief the speaker beforehand so a missing avatar is not a surprise on stage. |
+| Avatar quota exhausted | `handleAvatarError` closes the peer connection; **both audio and video are lost**. This is a media-plane failure — the WebSocket session, microphone and transcripts keep running. Prepare a full fallback plan (pre-recorded segment or static slides), agree the abort call, and brief the speaker beforehand so the failure is not a surprise on stage. |
 | App Service unreachable | Have the pre-recorded segment or static slides ready. Agree the abort call and who makes it. |
 | Network loss in the venue | The media plane is direct browser↔Azure WebRTC; there is no offline mode. Venue connectivity is a single point of failure — test it from the actual stage position, on the actual network, during rehearsal. |
 
@@ -1483,9 +1485,9 @@ git commit -m "docs: add production deployment guide"
 **Shipped — spec defects corrected:**
 
 - **Defect 1 (§3 voice-only fallback):** Spec said avatar quota exhaustion "falls back to voice-only". False — `handleAvatarError` in `main.ts` closes the peer connection, ending both audio and video. Corrected to: "both audio and video are lost — there is no voice-only fallback".
-- **Defect 2 (§8 business-continuity avatar row):** Spec said "Voice-only mode already degrades automatically." False for the same reason. Rewrote: "`handleAvatarError` closes the peer connection; both audio and video are lost. This is not an automatic graceful degradation — it is a session failure."
+- **Defect 2 (§8 business-continuity avatar row):** Spec said "Voice-only mode already degrades automatically." False for the same reason. Corrected: `handleAvatarError` closes the peer connection; both audio and video are lost. This is a media-plane failure — the WebSocket session, microphone and transcripts keep running.
 - **Defect 3 (§3 `MaxConcurrentSessions` location):** Spec said `config/session.json`. False — the setting is bound by `VoiceLiveOptions` and lives in `appsettings.json`; in Azure it is overridden via `VoiceLive__MaxConcurrentSessions` App Service application setting.
-- **Additional (§2 rotation):** Spec claimed changing `Auth:Username` invalidates cookies. False — the auth guard checks only `IsAuthenticated`, never the username against config. Corrected: only an app restart revokes sessions.
+- **Additional (§2 rotation):** Spec claimed changing `Auth:Username` invalidates cookies. False — the auth guard checks only `IsAuthenticated`, never the username against config. Corrected: there is no immediate revocation mechanism; destroying the Data Protection key ring and restarting is the only way to drop all active sessions.
 - **Additional (§6 environments table):** `` `rehearsal` `` backtick-wrapped tripped the credential-literals guard. Changed to plain "rehearsal".
 
 **Tests: 98 passed / 2 failed / 100 total.** Failures remain `Every_docs_image_is_referenced_by_maintained_markdown` and `Maintained_markdown_has_no_broken_relative_links` (broken-link set matches expected).

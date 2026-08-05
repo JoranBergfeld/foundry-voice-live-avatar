@@ -18,7 +18,7 @@
 
 ## 2. Secrets
 
-**Never** set the operator password with `azd env set AUTH_PASSWORD <password>` for a production deployment. That lands the sole credential in plaintext App Service configuration, readable by anyone with Reader on the resource.
+**Never** set the operator password with `azd env set AUTH_PASSWORD <password>` for a production deployment. That lands the sole credential in plaintext App Service configuration, readable by anyone with Contributor or Website Contributor on the resource (any principal holding `Microsoft.Web/sites/config/list/action`).
 
 Use a Key Vault reference instead:
 
@@ -31,7 +31,11 @@ az webapp config appsettings set --name <app> --resource-group <rg> --settings \
 
 The web app's system-assigned managed identity needs **Key Vault Secrets User** on the vault. Verify resolution before the event — a failed reference surfaces as the literal `@Microsoft.KeyVault(...)` string becoming the password, so **sign in successfully after every secret change**.
 
-**Rotation.** Rotate after every event and whenever anyone with the credential leaves the team. Rotation is a secret update plus an app restart. Session cookies are validated by ASP.NET Core Data Protection keys, not by re-checking the stored credentials: **a password or username change alone does not revoke any active session**. An app restart invalidates all cookies because the default Data Protection configuration does not persist keys across restarts. Restarting the app is the only supported way to revoke all active sessions immediately.
+**Rotation.** Rotate after every event and whenever anyone with the credential leaves the team. Rotation is a secret update. Session cookies are validated by ASP.NET Core Data Protection keys, not by re-checking the stored credentials: **a password or username change alone does not revoke any active session**. The cookie is a self-contained Data Protection payload, and the 8-hour expiry is **sliding** — an active tab renews the cookie on each request and never ages out on its own.
+
+**There is no immediate revocation mechanism in the application.** On App Service the Data Protection key ring is stored under `%HOME%/ASP.NET/DataProtection-Keys`, which persists across restarts and scale operations (App Service rule 1: keys are persisted when the app is hosted in Azure App Service). To force all sessions to drop you must destroy the key ring — delete `%HOME%/ASP.NET/DataProtection-Keys` via Kudu/SSH then restart, or configure an external key store (Azure Blob or Key Vault) that can be purged — after which every existing cookie becomes invalid.
+
+**Key Vault reference ordering.** The `Auth__Password` application setting is also written on every `azd provision`, sourced from the `AUTH_PASSWORD` environment variable. Any `azd up` or `azd provision` run after you set the Key Vault reference will overwrite it. Re-apply the Key Vault reference and re-verify sign-in after every provision. For a first deployment, `AUTH_PASSWORD` must be set to a non-empty value so the app starts with a valid credential; replace it with the Key Vault reference immediately after provision.
 
 **Never** commit credentials. `appsettings.Development.json` carries no `Auth` section, and a test enforces that.
 
@@ -49,7 +53,7 @@ Three independent limits, in the order you will hit them:
 
 **Each browser tab is a session.** An operator view plus a display view is two sessions — the entire default budget. Plan the slot count against the number of tabs you will actually open, plus one spare for a mid-show reconnect.
 
-**Request avatar quota before the event, not on the day.** Quota approval is not instant, and the failure mode is a lost session — the peer connection closes and the avatar goes dark.
+**Request avatar quota before the event, not on the day.** Quota approval is not instant, and the failure mode is a media-plane failure — the peer connection closes and the avatar goes dark, while the WebSocket session, microphone and transcripts keep running.
 
 ## 4. Cost
 
@@ -74,7 +78,7 @@ Application Insights and Log Analytics are provisioned, and the app emits OpenTe
 |---|---|---|
 | Health degraded | `/api/health` availability test, non-200 for 2 consecutive minutes | Catches invalid config and lost RBAC before showtime |
 | Session start failures | Exception rate on the session-start path > 0 over 5 minutes | The `403`/`429`/quota failures that end a show |
-| Capacity rejections | Gate-rejection count > 0 | Someone opened one tab too many |
+| Capacity rejections | `voicelive.active_sessions` sustained at `MaxConcurrentSessions` | Someone opened one tab too many (gate-rejection metric is not yet emitted — M-01 remediation) |
 | Instance health | CPU > 80% for 5 minutes | B1 saturation drops audio |
 
 Useful Log Analytics queries:
@@ -123,11 +127,13 @@ The most important production procedure, and the fastest.
 
 ```bash
 # List recent deployments, newest first
-az webapp deployment list --name <app> --resource-group <rg> \
+az webapp log deployment list --name <app> --resource-group <rg> \
   --query "[].{id:id, time:received_time, active:active}" -o table
 
-# Roll back to a previous deployment
-az webapp deployment source config-zip --name <app> --resource-group <rg> --src <previous.zip>
+# Roll back by re-deploying a retained artifact (rollback is re-deploying a previous build;
+# the deployment id is for correlation and audit only — no slot-swap rollback is available
+# on the B1 plan, which cannot host staging slots)
+az webapp deploy --name <app> --resource-group <rg> --src-path <previous.zip> --type zip
 ```
 
 **Prepare a rollback before the event:** keep the last known-good published artifact, and record its deployment id in the event runbook. Mid-show is not when you discover the artifact is gone.
@@ -141,7 +147,7 @@ The whole project exists to serve one high-stakes live moment, so plan for the r
 | Scenario | Prepared fallback |
 |---|---|
 | Foundry region degraded | Pre-provision a second `azd` environment in an alternate region **that supports native realtime voice, avatar and agent mode**. Verify it during rehearsal — an untested standby is not a standby. |
-| Avatar quota exhausted | `handleAvatarError` closes the peer connection; **both audio and video are lost**. This is not an automatic graceful degradation — it is a session failure. Prepare a full fallback plan (pre-recorded segment or static slides), agree the abort call, and brief the speaker beforehand so the failure is not a surprise on stage. |
+| Avatar quota exhausted | `handleAvatarError` closes the peer connection; **both audio and video are lost**. This is a media-plane failure, not a full session failure — the WebSocket session, microphone and transcripts keep running. Prepare a full fallback plan (pre-recorded segment or static slides), agree the abort call, and brief the speaker beforehand so the failure is not a surprise on stage. |
 | App Service unreachable | Have the pre-recorded segment or static slides ready. Agree the abort call and who makes it. |
 | Network loss in the venue | The media plane is direct browser↔Azure WebRTC; there is no offline mode. Venue connectivity is a single point of failure — test it from the actual stage position, on the actual network, during rehearsal. |
 
