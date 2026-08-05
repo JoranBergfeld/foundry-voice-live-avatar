@@ -93,4 +93,46 @@ public sealed class DocumentationTests
 
         Assert.True(broken.Count == 0, "Broken relative links:\n  " + string.Join("\n  ", broken));
     }
+
+    /// <summary>
+    /// Credential literals that must never appear as code-formatted values in maintained
+    /// documentation. Add to this list whenever a credential is retired, never remove from it.
+    /// </summary>
+    private static readonly string[] ForbiddenCredentialLiterals = ["`rehearsal`"];
+
+    [Fact]
+    public void Maintained_markdown_publishes_no_credential_literals()
+    {
+        var root = RepoRoot;
+        var violations = new List<string>();
+
+        foreach (var rel in MaintainedMarkdown())
+        {
+            var lines = File.ReadAllLines(Path.Combine(root, rel));
+            for (var i = 0; i < lines.Length; i++)
+            {
+                foreach (var literal in ForbiddenCredentialLiterals)
+                {
+                    if (lines[i].Contains(literal, StringComparison.Ordinal))
+                        violations.Add($"{rel}:{i + 1} contains {literal}");
+                }
+            }
+        }
+
+        Assert.True(
+            violations.Count == 0,
+            "Documentation must not publish working credentials. Use `dotnet user-secrets` instructions instead:\n  "
+                + string.Join("\n  ", violations));
+    }
+
+    [Fact]
+    public void Development_settings_carry_no_auth_section()
+    {
+        var path = Path.Combine(RepoRoot, "web", "src", "VoiceLive.Web", "appsettings.Development.json");
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+
+        Assert.False(
+            doc.RootElement.TryGetProperty("Auth", out _),
+            "appsettings.Development.json must not contain an Auth section. Use `dotnet user-secrets` so credentials are never committed.");
+    }
 }
