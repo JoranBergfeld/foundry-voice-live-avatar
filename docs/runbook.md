@@ -105,7 +105,7 @@ curl -s http://localhost:5280/api/health
 
 For deployed environments, use `azd up`, open the printed URL, and sign in with the configured `AUTH_USERNAME` / `AUTH_PASSWORD`.
 
-Known MVP limitation: each browser tab opens its own `/ws/session`, which creates its own server-side session. The operator tab is the complete self-contained experience. A shared operator+display room is future work.
+Known MVP limitation: each browser tab opens its own `/ws/session`, which creates its own server-side session. The display tab therefore runs an independent Voice Live session whose avatar does **not** mirror the operator's conversation and produces **no** audio — room audio must come from the operator machine. The operator tab is the complete self-contained experience; a shared operator+display room with one conversation across two screens is future work.
 
 ## 7. Avatar operation
 

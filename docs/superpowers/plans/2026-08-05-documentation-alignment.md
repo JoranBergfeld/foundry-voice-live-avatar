@@ -578,6 +578,8 @@ Added a new bullet: a `?view=display` screen that disconnects stays dead until a
 
 - [x] **Fix HIGH — display-tab sign-in step unsatisfiable (`docs/rehearsal-checklist.md:30`):** `Program.cs:106` redirects unauthenticated requests to `/login` with no `ReturnUrl`, discarding `?view=display`; `LoginEndpoints.cs:30` redirects POST to `/`, not `/?view=display`. Both same-profile and separate-machine paths left the operator on the wrong URL with no route to the display view without explicit re-navigation. Fixed by replacing the "reload" instruction with an explicit *"navigate the display tab to `/?view=display`"* step after sign-in, with an explanatory parenthetical. The gesture step (click in display tab) and confirm step remain in the correct order: sign in → navigate to `/?view=display` → click once → confirm video and audio.
 
+- [x] **Fix HIGH — "confirm audio in display tab" is unsatisfiable (`docs/rehearsal-checklist.md:32`):** The display tab opens its own independent `/ws/session` that receives no microphone input and has no operator controls; its avatar sits idle and silent forever. Video arrives; speech never does. Changed the confirm step to ask only for what is actually observable: avatar video present, connection status healthy, and avatar **idle and silent** as the expected correct state. Added explicit statement that room audio must come from the operator machine. Connected the per-tab-session notes to this consequence in the "Known limitations" section (`docs/rehearsal-checklist.md`), `docs/runbook.md:108`, and `web/README.md:61`.
+
 ---
 
 ## Task 7: D-03 — remove the three unimplemented `agent.json` keys

@@ -58,7 +58,7 @@ ConfigDir=/home/jbergfeld/vcs/foundry-voice-live-avatar/config ASPNETCORE_URLS=h
 
 Open `http://127.0.0.1:5210/` (fullscreen landing) or `http://127.0.0.1:5210/?view=operator` (operator console), sign in, grant microphone permission, then hold **Hold to talk**. Expect avatar video, spoken answer audio, and live/final transcripts. Open `http://127.0.0.1:5210/?view=display` for the passive fullscreen avatar-only view (no microphone).
 
-MVP limitation: every browser tab opens its own `/ws/session`, which creates its own server-side Voice Live session. The operator tab is the complete self-contained experience; a shared operator/display room with one conversation across two screens is future work.
+MVP limitation: every browser tab opens its own `/ws/session`, which creates its own server-side Voice Live session. The display tab therefore runs an independent session whose avatar does **not** mirror the operator's conversation and produces **no** audio — room audio must come from the operator machine. The operator tab is the complete self-contained experience; a shared operator/display room with one conversation across two screens is future work.
 
 ## Security
 
