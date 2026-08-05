@@ -1928,15 +1928,38 @@ git commit -m "docs: add architecture decision records"
 
 ---
 
-## Task 19: D-12 — threat model
+## Task 19: D-12 — threat model ✅ SHIPPED
 
 Both reviews found their worst issues where an unstated trust assumption failed: that `RemoteIpAddress` is trustworthy (C-01) and that an authenticated client is benign (H-01). Writing the assumptions down is what makes them reviewable.
 
 **Files:**
-- Create: `docs/threat-model.md`
-- Modify: `README.md`
+- Created: `docs/threat-model.md`
+- Modified: `README.md`
 
-- [ ] **Step 1: Create the document**
+**Spec errors corrected:**
+
+1. **Entry-points table was incomplete.** The spec omitted three endpoints present in `docs/wire-protocol.md` (the authoritative reference):
+   - `GET /` (cookie-protected, app shell) — added
+   - `POST /logout` (anonymous, H-02 target) — added; spec inconsistently cited H-02 for `/login` but omitted `/logout` which the finding explicitly names
+   - `GET /api/config` (cookie-protected, returns browser-safe config) — added; confirmed at `Program.cs:112-115`
+
+2. **"Enforced" row named the wrong thing.** Spec said "a test fails if…" without naming the tests. The actual test names are `Development_settings_carry_no_auth_section` and `Maintained_markdown_publishes_no_credential_literals`. These are now cited accurately.
+
+3. **Attendee-speech privacy claim was imprecise.** Spec said "Not persisted by this app" without noting the gated-mode nuance. Verified: default `activeMode = "gated"` sets `manualTurn: true`, which causes `UsesTurnDetection()` to return false, so `InputAudioTranscription` is never configured — no user transcripts are produced at all by default. This is materially relevant to a privacy claim and is now stated accurately.
+
+4. **ADR 0003 cookie-revocation nuance omitted.** The "shared credential" row now notes that changing the password or username does **not** revoke live sessions (8-hour sliding cookie), and that restarting on App Service does not revoke either — only destroying the key ring does. Links to ADR 0003.
+
+5. **Bicep re-provision clobbers Key Vault references.** `infra/resources.bicep:89` writes `Auth__Password` as plaintext on every `azd up`, which clobbers any Key Vault reference set between provisions. Added as a row in the assumptions table, referencing M-02.
+
+6. **Scale-out multiplies the concurrency cap.** Per ADR 0005, `MaxConcurrentSessions = 2` is per-instance. Added as accepted risk #4.
+
+7. **README link placement.** The spec said "security/trust-boundary section" — that section does not exist by name in the restructured README. The link was added at the end of `## Production readiness`, which is where a reader encounters the security context.
+
+8. **`#production-readiness` anchor verified.** The heading `## Production readiness` in `README.md` produces anchor `#production-readiness`. Confirmed by reading the file.
+
+9. **`Origin` check on `/ws/session` verified.** `Program.cs:137` calls `OriginAllowed(context, opt.Value.AllowedOrigins)`. Non-browser clients with no `Origin` header are allowed through (lines 178-179). Documented accurately.
+
+- [x] **Step 1: Create the document**
 
 Create `docs/threat-model.md`:
 
@@ -1955,7 +1978,7 @@ One page. Actors, assets, entry points, and — most importantly — the assumpt
 | The operator credential | The only thing between the internet and everything below. |
 | Voice Live session capacity | Billed per minute, capped at 2 concurrent, with no timeout. Denial of service is also denial of budget. |
 | What the avatar says on stage | The reputational asset. Compromise here is visible to a live audience in real time. |
-| Attendee speech | Microphone audio processed in the EU. Not persisted by this app. |
+| Attendee speech | Microphone audio sent to Azure (EU region by default). Not persisted by this app. In the default **gated** mode (`turntaking.json: activeMode = "gated"`), `manualTurn` is `true`, so `InputAudioTranscription` is never configured — no user transcripts are produced at all by default. Transcription is only active when a mode with turn detection is selected. |
 
 ## Actors
 
@@ -1963,18 +1986,24 @@ One page. Actors, assets, entry points, and — most importantly — the assumpt
 |---|---|---|
 | Operator | Trusted | Full app access. Runs the show. |
 | Authenticated user | **Trusted by the design, and this is the weak point** | Everything the operator can do, including `say`. |
-| Network attacker (unauthenticated) | Untrusted | Can reach `/login`, `/api/health`, and forge headers on requests. |
+| Network attacker (unauthenticated) | Untrusted | Can reach `/login`, `/logout`, `/api/health`, and forge headers on requests. |
 | Audience member | Untrusted | Physical proximity; may be picked up by the microphone. |
 | Azure Foundry | Trusted | Generates what the audience sees and hears. |
 
 ## Entry points
 
+Authoritative source: [`docs/wire-protocol.md`](wire-protocol.md). Any disagreement between the two documents is a bug here.
+
 | Entry point | Auth | Notes |
 |---|---|---|
-| `GET/POST /login` | Anonymous | Credential guessing surface. Rate limiting is per-IP and header-forgeable (C-01); no antiforgery (H-02). |
+| `GET /` | Cookie | Application shell (operator, display, landing views). Unauthenticated requests redirect to `/login`. |
+| `GET /login` | Anonymous | Sign-in form. |
+| `POST /login` | Anonymous | Credential submission. Rate limiting is per-IP and header-forgeable (C-01); no antiforgery (H-02). |
+| `POST /logout` | **Anonymous** | Clears the auth cookie. Deliberately on the anonymous allow-list (`Program.cs:95-97`); no antiforgery (H-02). |
 | `GET /api/health` | Anonymous | Discloses configuration validity to unauthenticated callers. |
-| `GET /ws/session` | Cookie + `Origin` check | Consumes a concurrency slot and starts billing. |
-| `say` frame | Cookie | **Arbitrary text spoken on stage. Unconstrained (H-01).** |
+| `GET /api/config` | Cookie | Returns browser-safe config (region, model, voice, avatar settings, turn-taking mode, agent metadata, safe questions). |
+| `GET /ws/session` | Cookie + `Origin` check | Consumes a concurrency slot and starts billing. `Origin` validation rejects requests from outside allowed origins (same-origin or configured `AllowedOrigins`); non-browser clients with no `Origin` header are allowed through. |
+| `say` WebSocket frame | Cookie (session already open) | **Arbitrary text spoken on stage. Unconstrained (H-01).** |
 | `config/*.json` | Filesystem | Anyone who can change these changes avatar behaviour. Deployment-time trust. |
 
 ## Assumptions this design trusts without verifying
@@ -1983,40 +2012,42 @@ One page. Actors, assets, entry points, and — most importantly — the assumpt
 
 | Assumption | Status | If false |
 |---|---|---|
-| The network is trusted and access is limited to the event team | **Not enforced by anything.** `azd up` yields a public endpoint | Every row below becomes exploitable by anyone on the internet |
-| An authenticated user is benign | **Accepted risk, deliberately** | Arbitrary avatar speech in front of an audience (H-01) |
-| The client IP seen by the rate limiter is real | **False today** — forwarded headers are unvalidated | Per-IP login rate limiting is bypassable (C-01) |
-| One shared credential is sufficient identity | **Accepted for this deployment shape** | No attribution, no per-person revocation ([ADR 0003](adr/0003-shared-cookie-authentication.md)) |
-| The operator credential is not in source control | **Enforced** — a test fails if `appsettings.Development.json` carries an `Auth` section, and if docs publish credential literals | Public credential disclosure (C-02) |
+| The network is trusted and access is limited to the event team | **Not enforced by anything.** `azd up` yields a public endpoint with no IP restrictions | Every row below becomes exploitable by anyone on the internet |
+| An authenticated user is benign | **Accepted risk, deliberately** | Arbitrary avatar speech in front of an audience ([H-01](../review-merged.md#h-01--say-control-frame-is-an-unrestricted-prompt-injection-and-cost-channel--high)) |
+| The client IP seen by the rate limiter is real | **False today** — forwarded headers are unvalidated | Per-IP login rate limiting is bypassable ([C-01](../review-merged.md#c-01--login-rate-limiter-bypassable-via-spoofed-x-forwarded-for--critical)) |
+| One shared credential is sufficient identity | **Accepted for this deployment shape** | No attribution, no per-person revocation ([ADR 0003](adr/0003-shared-cookie-authentication.md)). Changing the password or username does **not** revoke live sessions; the 8-hour **sliding** cookie renews on each request. The only revocation path is destroying the ASP.NET Data Protection key ring — restarting the app does not suffice on App Service. |
+| The operator credential is not in source control | **Enforced** — `Development_settings_carry_no_auth_section` fails if `appsettings.Development.json` carries an `Auth` section; `Maintained_markdown_publishes_no_credential_literals` fails if docs publish credential literals | Public credential disclosure ([C-02](../review-merged.md#c-02--working-credentials-committed-to-the-repository--critical)) |
 | Config files are only writable by deployers | Deployment-time trust, unverified at runtime | Arbitrary behaviour change with no audit |
 | Azure output is safe to show an audience | Trusted; no content filtering in this app | Whatever the model produces reaches the stage |
+| `Auth__Password` in App Service settings is protected | **Not enforced** — `infra/resources.bicep:89` writes `Auth__Password` as a plaintext app setting on every `azd up`, clobbering any Key Vault reference set between provisions ([M-02](../review-merged.md)) | The credential is visible as a plaintext App Service setting after any re-provision |
 
 ## Accepted risks
 
 Stated so they are decisions rather than oversights:
 
-1. **Any authenticated user can make the avatar say anything.** Accepted because the authenticated population is the event team. Unacceptable the moment that population grows — fix H-01 first.
+1. **Any authenticated user can make the avatar say anything.** Accepted because the authenticated population is the event team. Unacceptable the moment that population grows — fix [H-01](../review-merged.md#h-01--say-control-frame-is-an-unrestricted-prompt-injection-and-cost-channel--high) first.
 2. **No per-operator identity or audit trail.** Accepted for a single-event deployment.
-3. **No session timeout.** Accepted because sessions are attended; it is a live cost risk if that stops being true (M-01).
-4. **No content filtering of avatar output.** Accepted because the model and prompt are controlled and the show is rehearsed.
+3. **No session timeout.** Accepted because sessions are attended; it is a live cost risk if that stops being true ([M-01](../review-merged.md#m-01--no-idle-or-absolute-session-timeout-capacity-gate-trivially-exhausted--high)).
+4. **Session concurrency cap is per-instance.** The `MaxConcurrentSessions = 2` semaphore is in-process; scale-out multiplies the effective cap. Accepted for single-instance deployments — see [ADR 0005](adr/0005-per-instance-session-cap.md).
+5. **No content filtering of avatar output.** Accepted because the model and prompt are controlled and the show is rehearsed.
 
 ## Out of scope
 
 Azure platform security, the venue's physical security, and the endpoint security of the operator's laptop.
 ```
 
-- [ ] **Step 2: Link it from the README security section**
+- [x] **Step 2: Link it from the README security section**
 
-In `README.md`, at the end of the security/trust-boundary section, add:
+No "security/trust-boundary section" exists by that name in the restructured README. Link added at the end of `## Production readiness` (after the `docs/production-deployment.md` reference), which is where a reader encounters the security context:
 
 ```markdown
 Actors, assets, entry points and the assumptions this design trusts without verifying are enumerated in [`docs/threat-model.md`](docs/threat-model.md).
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
-git add docs/threat-model.md README.md
+git add docs/threat-model.md README.md docs/superpowers/plans/2026-08-05-documentation-alignment.md
 git commit -m "docs: add threat model with explicit trust assumptions and accepted risks"
 ```
 

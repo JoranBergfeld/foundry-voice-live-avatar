@@ -176,6 +176,8 @@ Close these before an exposed deployment. IDs link to the finding detail in [`re
 
 **Also required, and not covered by the code findings above:** decide the identity model (a single shared credential is the whole authentication story today), plan avatar-rendering quota ahead of the event, set up alerting on `/api/health`, and agree a rollback procedure. See [`docs/production-deployment.md`](docs/production-deployment.md).
 
+Actors, assets, entry points and the assumptions this design trusts without verifying are enumerated in [`docs/threat-model.md`](docs/threat-model.md).
+
 ## Deploy to Azure
 
 > **Before running `azd up`**, close the findings in [Production readiness](#production-readiness) — the command produces a public HTTPS endpoint.
