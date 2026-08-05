@@ -2451,3 +2451,25 @@ Expected: exit 0. Only three non-documentation files changed (`.csproj`, `appset
 | D-24 triplicated content drifting | Medium | 11, 16 | Single authoritative locations; drift tests |
 
 **Code findings deliberately excluded** (separate plan): C-01, C-02 code half, H-01, H-02, H-03 code half, H-04 code half, H-05, M-01…M-15, L-01…L-20. Where documentation now describes behaviour those fixes will change — Task 5 (reconnect), Task 6 (autoplay) — the task says so and names the finding.
+
+---
+
+## Completion note — Task 21 executed 2026-08-05
+
+**Final test counts:** 101 passed / 0 failed / 101 total.
+
+**Changes shipped:**
+- Created `docs/README.md` — Diátaxis-organised index of all maintained documentation. Added SECURITY.md, CODE_OF_CONDUCT.md, and CHANGELOG.md to the index (omitted from the task spec but required by the "omits any of them" instruction).
+- Moved `docs/superpowers/` → `docs/history/superpowers/` and `docs/initial-spec.md` → `docs/history/initial-spec.md` with `git mv`.
+- Updated `README.md:402` from `docs/initial-spec.md` to `docs/history/initial-spec.md`.
+- Updated `docs/runbook.md` §1 from the old spec deep-link to `Design background (historical, not maintained): [history/initial-spec.md]`.
+- Fixed all relative links inside `docs/history/initial-spec.md` (added extra `../` level for `../../README.md`, `../../README.md#why-this-exists`, `../wire-protocol.md`, `../config-schema.md`). Added `[docs/README.md](../README.md)` pointer to the new index.
+- Updated `DocumentationTests.cs` exclusion from dead `docs/superpowers/` to `docs/history/superpowers/` (non-weakening path correction; `docs/history/` exclusion already covered it).
+
+**Spec defects found:**
+1. Spec said "8 passed" and "seven documentation tests" — actual count is **11** `[Fact]` methods.
+2. Spec said "90 tests" — actual is **101**.
+3. Sweep false-alarm guidance was incomplete: legitimate hits in `docs/session-flow.md` (deliberate "no automatic reconnect" corrections), `docs/config-schema.md` (`azure-custom` Known trap), `docs/runbook.md` (Former name), `CONTRIBUTING.md` (Known trap), `CHANGELOG.md` (Removed section) — all classified legitimate. No hits in `README.md` or `web/README.md`. Zero `/home/` hits.
+4. `review-merged.md` contains stale `docs/superpowers/` and `docs/initial-spec.md` references — legitimate, as it is an excluded point-in-time review artifact.
+
+**Traceability table defects:** The table in the spec was written before Tasks 16, 17, 20 completed. The table is accurate for D-01–D-22 as shipped; D-23 and D-24 map correctly to Tasks 20 and 11/16 respectively. No finding IDs were invented.

@@ -399,5 +399,5 @@ README.md
 - [docs/runbook.md](docs/runbook.md) — deployment, environment variables, operations, troubleshooting
 - [docs/config-schema.md](docs/config-schema.md) — full config file schema and all fields
 - [docs/rehearsal-checklist.md](docs/rehearsal-checklist.md) — pre-show and rehearsal checklist
-- [docs/initial-spec.md](docs/initial-spec.md) — original design specification
+- [docs/history/initial-spec.md](docs/history/initial-spec.md) — original design specification
 - [web/README.md](web/README.md) — backend and frontend architecture detail

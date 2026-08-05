@@ -6,7 +6,7 @@
 
 This repository contains one operator-facing ASP.NET Core web app at [`web/`](../web/README.md). The app ships the `/config` directory, authenticates operators with app-level cookie auth, hosts the Voice Live session server-side, and bridges browser audio/control messages over `/ws/session`.
 
-The `/config` files hold runtime voice/audio/avatar settings, safe questions, agent metadata, and grounding markdown. Endpoint, API version, and mode are app settings under `VoiceLive:*`. See the design background in [`docs/superpowers/specs/2026-07-22-voice-live-avatar-design.md`](superpowers/specs/2026-07-22-voice-live-avatar-design.md).
+The `/config` files hold runtime voice/audio/avatar settings, safe questions, agent metadata, and grounding markdown. Endpoint, API version, and mode are app settings under `VoiceLive:*`. Design background (historical, not maintained): [`history/initial-spec.md`](history/initial-spec.md).
 
 ## 2. Prerequisites
 

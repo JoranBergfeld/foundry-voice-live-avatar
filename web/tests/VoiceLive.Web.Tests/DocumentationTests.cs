@@ -28,7 +28,7 @@ public sealed class DocumentationTests
         return Directory
             .EnumerateFiles(root, "*.md", SearchOption.AllDirectories)
             .Select(p => Path.GetRelativePath(root, p).Replace('\\', '/'))
-            .Where(rel => !rel.StartsWith("docs/superpowers/", StringComparison.Ordinal))
+            .Where(rel => !rel.StartsWith("docs/history/superpowers/", StringComparison.Ordinal))
             .Where(rel => !rel.StartsWith("docs/history/", StringComparison.Ordinal))
             .Where(rel => !rel.Contains("/bin/", StringComparison.Ordinal))
             .Where(rel => !rel.Contains("/obj/", StringComparison.Ordinal))
