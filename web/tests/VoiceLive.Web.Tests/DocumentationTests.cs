@@ -311,26 +311,43 @@ public sealed class DocumentationTests
         // This claim has been introduced, removed, and nearly reintroduced — this guard
         // prevents future drift.
         //
-        // - **Known trap:** any line whose text *contains* "no voice-only fallback" is
-        //   the correct negation and is explicitly exempt. The guard fires only on lines
-        //   that mention "voice-only fallback" without that negation prefix — i.e., lines
-        //   that frame it as a feature or design decision.
+        // A line is flagged if it contains "voice-only fallback" (or "voice only fallback",
+        // without the hyphen) but does NOT contain a negation marker in proximity to the
+        // phrase. Accepted negation forms:
+        //   • (no|not) immediately before the phrase, with optional markdown emphasis
+        //     (*,**,`,_) between them — e.g. "no voice-only fallback",
+        //     "there is no **voice-only fallback**", "not voice-only fallback"
+        //   • "does not exist", "is not implemented", or "possible" within 60 characters
+        //     after the phrase — "does not exist"/"is not implemented" cover direct negations;
+        //     "possible" covers the canonical future-aspiration form "would make voice-only
+        //     fallback possible" (i.e. it doesn't exist yet but could be implemented)
+        // A bare "known gap" elsewhere on the same line does NOT exempt: a markdown table
+        // row where independent cells share one line could disarm the guard with two common
+        // words that have nothing to do with the voice-only claim.
         var root = RepoRoot;
+
+        // Matches the trigger phrase, with or without hyphen.
+        var trigger = new Regex(
+            @"voice[\-\s]only\s+fallback",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        // Matches a negation in proximity to the trigger phrase:
+        // Pattern A — negation before the phrase (optional markdown emphasis between them).
+        // Pattern B — phrase followed by a post-phrase negation or qualifier within 60 chars
+        //             ("does not exist", "is not implemented", or "possible" — the last covers
+        //             "would make voice-only fallback possible", the canonical future-aspiration form).
+        var negated = new Regex(
+            @"(no|not)\s*[\*`_]*\s*voice[\-\s]only[\*`_\s]+fallback" +
+            @"|voice[\-\s]only[\*`_\s]+fallback.{0,60}(does\s+not\s+exist|is\s+not\s+implemented|\bpossible\b)",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+
         var violations = MaintainedMarkdown()
             .SelectMany(rel =>
             {
                 var lines = File.ReadAllLines(Path.Combine(root, rel));
                 return lines
                     .Select((line, i) => (rel, line, i))
-                    .Where(x =>
-                    {
-                        if (!x.line.Contains("voice-only fallback", StringComparison.OrdinalIgnoreCase)) return false;
-                        // "no voice-only fallback" is the correct negated form — exempt.
-                        if (x.line.Contains("no voice-only fallback", StringComparison.OrdinalIgnoreCase)) return false;
-                        // Lines that explicitly call it a "known gap" are documenting its absence — exempt.
-                        if (x.line.Contains("known gap", StringComparison.OrdinalIgnoreCase)) return false;
-                        return true;
-                    });
+                    .Where(x => trigger.IsMatch(x.line) && !negated.IsMatch(x.line));
             })
             .Select(x => $"{x.rel} line {x.i + 1}: {x.line.Trim()}")
             .ToList();
@@ -340,7 +357,10 @@ public sealed class DocumentationTests
             "(killing both audio and video), and the server never forwards audio to the browser " +
             "(no ResponseAudioDelta case in VoiceLiveWebSocketBridge.cs). " +
             "Do not assert it as a feature or design decision. " +
-            "Lines that say 'no voice-only fallback' are the correct form and are exempt.\n  " +
+            "To exempt a correct line, use a negation marker ('no', 'not', 'does not exist', " +
+            "or 'is not implemented') in proximity to the phrase, or end with 'possible' for " +
+            "future-aspiration phrasing — e.g. 'no **voice-only fallback**', " +
+            "'Voice-only fallback does not exist', or 'would make voice-only fallback possible'.\n  " +
             string.Join("\n  ", violations));
     }
 

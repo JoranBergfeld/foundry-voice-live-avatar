@@ -409,7 +409,9 @@ class ThinVoiceLiveClient {
   }
 
   private handleAvatarError(message: string) {
-    // Avatar rendering is unavailable (e.g. capacity/quota); the voice session continues without video.
+    // Avatar rendering is unavailable (e.g. capacity/quota); both audio and video are lost
+    // because both transceivers ride the same WebRTC peer connection — closing it ends all
+    // inbound media, not just the video stream. There is no voice-only fallback.
     this.pc?.close();
     this.pc = undefined;
     this.setStatus("avatar", "unavailable");

@@ -32,7 +32,7 @@ This avatar converses **on stage with a C-level leader**, explaining company dir
 Stating these plainly, because the architecture only makes sense against them:
 
 - **Not multi-tenant and not multi-user.** Authentication is one shared username and password. Everyone who signs in is the same principal, and there is no per-operator identity, audit trail, or authorization model.
-- **Not internet-facing.** See [Production readiness](#production-readiness) below before exposing this to an untrusted network.
+- **Not internet-facing by intent — but `azd up` publishes a public endpoint.** The Bicep template provisions a public App Service with no IP restrictions or VNet integration; the only access control out of the box is the shared username/password. Restricting network access is the operator's responsibility. See [Non-goals](#non-goals) and [Production readiness](#production-readiness) before exposing this to an untrusted network.
 - **Not a persistent assistant.** There is no conversation storage, no cross-session memory, and no user profile.
 - **Not horizontally scalable as configured.** The concurrency cap is a per-instance in-memory gate; scaling out multiplies it rather than sharing it.
 - **One session per browser tab.** Opening the operator and display views simultaneously consumes two of the two available session slots.
