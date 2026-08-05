@@ -344,6 +344,8 @@ Inbound browser frames are capped at 1 MiB. Outbound sends are serialized. Activ
 - The browser **never** receives an Azure token. The `/api/config` endpoint returns only browser-safe fields.
 - **RBAC** — the managed identity is assigned `Cognitive Services User` and `Foundry User`. No API keys are used.
 
+The actors, assets, entry points and the assumptions this design trusts **without verifying** are enumerated in [`docs/threat-model.md`](docs/threat-model.md).
+
 ### Observability and failure behavior
 
 - **`/api/health`** returns 200 when config is valid and 503 when config failed validation at startup. Use it for App Service health checks and smoke tests.

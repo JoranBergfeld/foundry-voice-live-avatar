@@ -1941,7 +1941,7 @@ Both reviews found their worst issues where an unstated trust assumption failed:
 1. **Entry-points table was incomplete.** The spec omitted three endpoints present in `docs/wire-protocol.md` (the authoritative reference):
    - `GET /` (cookie-protected, app shell) — added
    - `POST /logout` (anonymous, H-02 target) — added; spec inconsistently cited H-02 for `/login` but omitted `/logout` which the finding explicitly names
-   - `GET /api/config` (cookie-protected, returns browser-safe config) — added; confirmed at `Program.cs:112-115`
+   - `GET /api/config` (cookie-protected, returns browser-safe config) — added; confirmed at `Program.cs:119-122`
 
 2. **"Enforced" row named the wrong thing.** Spec said "a test fails if…" without naming the tests. The actual test names are `Development_settings_carry_no_auth_section` and `Maintained_markdown_publishes_no_credential_literals`. These are now cited accurately.
 
@@ -1953,7 +1953,7 @@ Both reviews found their worst issues where an unstated trust assumption failed:
 
 6. **Scale-out multiplies the concurrency cap.** Per ADR 0005, `MaxConcurrentSessions = 2` is per-instance. Added as accepted risk #4.
 
-7. **README link placement.** The spec said "security/trust-boundary section" — that section does not exist by name in the restructured README. The link was added at the end of `## Production readiness`, which is where a reader encounters the security context.
+7. **README link placement.** The spec said "security/trust-boundary section". `README.md` does have `### Authentication and trust boundaries` — the earlier note that it did not was wrong. Pointers were added in both places: at the end of `## Production readiness`, and under `### Authentication and trust boundaries`, which is the section a reader searching for the trust boundary will find first.
 
 8. **`#production-readiness` anchor verified.** The heading `## Production readiness` in `README.md` produces anchor `#production-readiness`. Confirmed by reading the file.
 
@@ -1978,7 +1978,7 @@ One page. Actors, assets, entry points, and — most importantly — the assumpt
 | The operator credential | The only thing between the internet and everything below. |
 | Voice Live session capacity | Billed per minute, capped at 2 concurrent, with no timeout. Denial of service is also denial of budget. |
 | What the avatar says on stage | The reputational asset. Compromise here is visible to a live audience in real time. |
-| Attendee speech | Microphone audio sent to Azure (EU region by default). Not persisted by this app. In the default **gated** mode (`turntaking.json: activeMode = "gated"`), `manualTurn` is `true`, so `InputAudioTranscription` is never configured — no user transcripts are produced at all by default. Transcription is only active when a mode with turn detection is selected. |
+| Attendee speech | Microphone audio sent to Azure (EU region by default). In the default **gated** mode (`turntaking.json: activeMode = "gated"`), `manualTurn` is `true`, so `InputAudioTranscription` is never configured and **this app emits no `user-transcript` frames** — transcription is only active when a mode with turn detection is selected. That is a statement about this app only: the audio is still streamed to and processed by Azure regardless, and **Azure-side retention and abuse monitoring are governed by your Foundry resource, not by this application** — see [`production-deployment.md` §10](production-deployment.md#10-data-handling-and-privacy), which also covers the recording-notice obligation. |
 
 ## Actors
 
@@ -1988,6 +1988,7 @@ One page. Actors, assets, entry points, and — most importantly — the assumpt
 | Authenticated user | **Trusted by the design, and this is the weak point** | Everything the operator can do, including `say`. |
 | Network attacker (unauthenticated) | Untrusted | Can reach `/login`, `/logout`, `/api/health`, and forge headers on requests. |
 | Audience member | Untrusted | Physical proximity; may be picked up by the microphone. |
+| Unattended display browser | **Trusted by the design, and rarely attended** | The display view requires the auth cookie, so the machine driving the venue screen holds a live authenticated session in a public space. The cookie is 8-hour **sliding** and no password change revokes it, so anyone who reaches that keyboard inherits full app access — including `say`. Treat the display machine as a credential. |
 | Azure Foundry | Trusted | Generates what the audience sees and hears. |
 
 ## Entry points
@@ -2004,7 +2005,7 @@ Authoritative source: [`docs/wire-protocol.md`](wire-protocol.md). Any disagreem
 | `GET /api/config` | Cookie | Returns browser-safe config (region, model, voice, avatar settings, turn-taking mode, agent metadata, safe questions). |
 | `GET /ws/session` | Cookie + `Origin` check | Consumes a concurrency slot and starts billing. `Origin` validation rejects requests from outside allowed origins (same-origin or configured `AllowedOrigins`); non-browser clients with no `Origin` header are allowed through. |
 | `say` WebSocket frame | Cookie (session already open) | **Arbitrary text spoken on stage. Unconstrained (H-01).** |
-| `config/*.json` | Filesystem | Anyone who can change these changes avatar behaviour. Deployment-time trust. |
+| `config/*.json` and `config/grounding/*.md` | Filesystem | Anyone who can change these changes avatar behaviour. **The grounding markdown is not merely data:** in model mode `config/grounding/company-direction.md` becomes `VoiceLiveSessionOptions.Instructions` verbatim, so write access to it is equivalent to write access to what the avatar says. Deployment-time trust, unverified at runtime. |
 
 ## Assumptions this design trusts without verifying
 
@@ -2016,10 +2017,10 @@ Authoritative source: [`docs/wire-protocol.md`](wire-protocol.md). Any disagreem
 | An authenticated user is benign | **Accepted risk, deliberately** | Arbitrary avatar speech in front of an audience ([H-01](../review-merged.md#h-01--say-control-frame-is-an-unrestricted-prompt-injection-and-cost-channel--high)) |
 | The client IP seen by the rate limiter is real | **False today** — forwarded headers are unvalidated | Per-IP login rate limiting is bypassable ([C-01](../review-merged.md#c-01--login-rate-limiter-bypassable-via-spoofed-x-forwarded-for--critical)) |
 | One shared credential is sufficient identity | **Accepted for this deployment shape** | No attribution, no per-person revocation ([ADR 0003](adr/0003-shared-cookie-authentication.md)). Changing the password or username does **not** revoke live sessions; the 8-hour **sliding** cookie renews on each request. The only revocation path is destroying the ASP.NET Data Protection key ring — restarting the app does not suffice on App Service. |
-| The operator credential is not in source control | **Enforced** — `Development_settings_carry_no_auth_section` fails if `appsettings.Development.json` carries an `Auth` section; `Maintained_markdown_publishes_no_credential_literals` fails if docs publish credential literals | Public credential disclosure ([C-02](../review-merged.md#c-02--working-credentials-committed-to-the-repository--critical)) |
+| The operator credential is not in source control | **Partly enforced.** `Development_settings_carry_no_auth_section` genuinely enforces it for `appsettings.Development.json`. For documentation it is only a **regression guard**: `Maintained_markdown_publishes_no_credential_literals` matches the one retired literal, in backtick form, and cannot detect a *new* credential published in docs | Public credential disclosure ([C-02](../review-merged.md#c-02--working-credentials-committed-to-the-repository--critical)) |
 | Config files are only writable by deployers | Deployment-time trust, unverified at runtime | Arbitrary behaviour change with no audit |
 | Azure output is safe to show an audience | Trusted; no content filtering in this app | Whatever the model produces reaches the stage |
-| `Auth__Password` in App Service settings is protected | **Not enforced** — `infra/resources.bicep:89` writes `Auth__Password` as a plaintext app setting on every `azd up`, clobbering any Key Vault reference set between provisions ([M-02](../review-merged.md)) | The credential is visible as a plaintext App Service setting after any re-provision |
+| `Auth__Password` in App Service settings is protected | **Not enforced** — `infra/resources.bicep:89` writes `Auth__Password` as a plaintext app setting on every `azd up`, clobbering any Key Vault reference set between provisions ([M-02](../review-merged.md#m-02--auth__password-stored-as-a-plaintext-app-service-setting--high)) | The credential is visible as a plaintext App Service setting after any re-provision |
 
 ## Accepted risks
 
@@ -2038,7 +2039,7 @@ Azure platform security, the venue's physical security, and the endpoint securit
 
 - [x] **Step 2: Link it from the README security section**
 
-No "security/trust-boundary section" exists by that name in the restructured README. Link added at the end of `## Production readiness` (after the `docs/production-deployment.md` reference), which is where a reader encounters the security context:
+`README.md` does have a `### Authentication and trust boundaries` section; a pointer was added there as well as at the end of `## Production readiness`. Link added at the end of `## Production readiness` (after the `docs/production-deployment.md` reference), which is where a reader encounters the security context:
 
 ```markdown
 Actors, assets, entry points and the assumptions this design trusts without verifying are enumerated in [`docs/threat-model.md`](docs/threat-model.md).
