@@ -23,7 +23,7 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 | `region` | string | Required | Default: `swedencentral` | Azure region for the Voice Live resource. |
 | `model` | string | Required in model mode | Default: `gpt-realtime` | Realtime model name. In agent mode the configured agent owns the model. |
 | `voice` | object | Required | Contains `type`, `name` | Voice selection. |
-| `voice.type` | string | Required | `azure-realtime-native`, `azure-standard`, `azure-custom`, `openai`; default: `azure-realtime-native` | Voice provider/type. |
+| `voice.type` | string | Required | `azure-realtime-native`, `azure-standard`, `openai`; default: `azure-realtime-native` | Voice provider/type. |
 | `voice.name` | string | Required | Default: `en-US-AndrewNeural` | Voice name. |
 | `inputAudioNoiseReduction` | object | Required | Contains `type` | Input audio noise reduction settings. |
 | `inputAudioNoiseReduction.type` | string | Required | Default: `azure_deep_noise_suppression` | Noise reduction mode. |
@@ -97,7 +97,8 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 - `VoiceLive:Endpoint` and `VoiceLive:ApiVersion` must be configured.
 - `session.json` must not carry `endpoint`, `apiVersion`, or `mode`; those values come from app settings.
 - `session.json.model` is required in model mode and optional in agent mode.
-- `session.json.voice.type` must be one of `azure-realtime-native`, `azure-standard`, `azure-custom`, or `openai`.
+- `session.json.voice.type` must be one of `azure-realtime-native`, `azure-standard`, or `openai`.
+- **Known trap:** startup validation currently also accepts the value `azure-custom` even though session creation always fails on it, because no custom-voice endpoint id is configured. `/api/health` reports Healthy and every session fails at connect time. Do not use it. Tracked as finding H-03 in [`review-merged.md`](../review-merged.md).
 - `turntaking.json.activeMode` must be one of `open-mic`, `gated`, or `hybrid`, and the matching entry must exist in `modes`.
 - `agent.json.agentName` and `agent.json.agentProjectName` are required in agent mode.
 - Unknown values for `voice.type` or `turntaking.activeMode` fail fast at startup.
