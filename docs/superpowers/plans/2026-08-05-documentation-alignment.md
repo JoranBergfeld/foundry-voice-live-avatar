@@ -817,6 +817,8 @@ Three documents disagree. **Resolved by inspecting the role GUIDs in `infra/reso
 
 So `README.md` is correct and the runbook and checklist are stale — "Azure AI User" is not an *alternative* role, it is the **former name of the same role**. Say so once, in one place, and add a drift test.
 
+**Spec contradiction resolved (Task 11 implementation note):** Step 1's original test asserted no maintained markdown contained "Azure AI User" at all, but Step 4's replacement text included `*Azure AI User*`. The stated intent — say so *once*, as a historical note, not as an alternative role — was resolved by narrowing the guard: a line is exempt only if its trimmed text starts with `- **Former name:**` AND does not also contain `Foundry User`. This means the single explanatory sub-bullet in the runbook passes, while any "Foundry User / Azure AI User" alternative-role framing fails even if prefixed with the marker.
+
 **Files:**
 - Modify: `docs/runbook.md` (2 locations)
 - Modify: `docs/rehearsal-checklist.md`
@@ -839,15 +841,37 @@ Append inside the `DocumentationTests` class:
         Assert.True(bicep.Contains("53ca6127-db72-4b80-b1b0-d745d6d5456d", StringComparison.Ordinal),
             "infra/resources.bicep no longer assigns Foundry User; update the RBAC docs.");
 
-        // 'Azure AI User' is the retired display name of the Foundry User role, not a second
-        // role. Listing it as an alternative made three documents appear to disagree.
+        // 'Azure AI User' is the retired display name of the Foundry User role
+        // (53ca6127-db72-4b80-b1b0-d745d6d5456d), not a second role. Listing it as an
+        // alternative creates three-document disagreement and confuses new operators.
+        // The ONE permitted mention is on a line whose trimmed text starts with exactly
+        // "- **Former name:**" — the single explanatory note in docs/runbook.md that tells
+        // readers the Azure portal may show the old name. That shape is narrow enough that it
+        // cannot be confused with an allowed-values list or alternative-role framing, and
+        // appending the marker to an offending line does not help because the exemption is
+        // also conditional on the line NOT containing "Foundry User" (which the alternative-role
+        // framing always does).
+        // If you are writing docs/production-deployment.md: list the two roles as
+        // "`Cognitive Services User` and `Foundry User`", not "`Foundry User` / `Azure AI User`".
         var stale = MaintainedMarkdown()
-            .Where(rel => File.ReadAllText(Path.Combine(root, rel)).Contains("Azure AI User", StringComparison.Ordinal))
+            .SelectMany(rel =>
+            {
+                var lines = File.ReadAllLines(Path.Combine(root, rel));
+                return lines
+                    .Select((line, i) => (rel, line, i))
+                    .Where(x => x.line.Contains("Azure AI User", StringComparison.Ordinal)
+                                && !(x.line.TrimStart().StartsWith("- **Former name:**", StringComparison.Ordinal)
+                                     && !x.line.Contains("Foundry User", StringComparison.Ordinal)));
+            })
+            .Select(x => $"{x.rel} line {x.i + 1}: {x.line.Trim()}")
             .ToList();
 
         Assert.True(stale.Count == 0,
-            "These documents still list the retired role name 'Azure AI User' alongside 'Foundry User'. " +
-            "They are the same role (53ca6127-db72-4b80-b1b0-d745d6d5456d):\n  " + string.Join("\n  ", stale));
+            "These lines still list the retired role name 'Azure AI User' as an alternative role. " +
+            "It is the former display name of Foundry User (53ca6127-db72-4b80-b1b0-d745d6d5456d), not a separate role. " +
+            "Use '`Cognitive Services User` and `Foundry User`' instead. " +
+            "One explanatory mention is allowed only on a line whose trimmed text starts with '- **Former name:**'.\n  " +
+            string.Join("\n  ", stale));
     }
 ```
 
@@ -884,7 +908,8 @@ with:
 
 ```markdown
 - `Cognitive Services User` (`a97b65f3-24c7-4388-baec-2e87135dc908`)
-- `Foundry User` (`53ca6127-db72-4b80-b1b0-d745d6d5456d`) on the Foundry account/project. The Azure portal may still show this role under its former name, *Azure AI User* — it is the same role definition, so assign by GUID if the names are confusing.
+- `Foundry User` (`53ca6127-db72-4b80-b1b0-d745d6d5456d`) on the Foundry account/project.
+  - **Former name:** The Azure portal may still show this role under its former display name, *Azure AI User* — it is the same role definition, so assign by GUID if the names are confusing.
 ```
 
 - [ ] **Step 5: Fix the rehearsal checklist**

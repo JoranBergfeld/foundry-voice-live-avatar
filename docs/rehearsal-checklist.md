@@ -3,7 +3,7 @@
 ## Day before
 
 - [ ] Confirm the Azure AI Foundry resource is in `swedencentral`.
-- [ ] Confirm app/managed-identity RBAC: `Cognitive Services User` + `Foundry User` / `Azure AI User` on the account/project scope.
+- [ ] Confirm app/managed-identity RBAC: `Cognitive Services User` + `Foundry User` on the account/project scope.
 - [ ] Run `az login` on the operator machine for local runs, or confirm `azd up` has deployed the App Service managed identity.
 - [ ] Review `/config` and app settings against [`docs/config-schema.md`](config-schema.md).
 - [ ] Finalize `config/grounding/company-direction.md`.

@@ -40,7 +40,7 @@ azd up
 - an Azure AI Foundry account (`Microsoft.CognitiveServices/accounts`, kind `AIServices`) and project (`proj-default`), with local auth disabled;
 - a Linux App Service with system-assigned managed identity, WebSockets enabled, health-check path `/api/health`, and always-on;
 - Log Analytics and workspace-based Application Insights;
-- RBAC role assignments granting the app managed identity `Cognitive Services User` plus `Azure AI User` / `Foundry User` on the account/project.
+- RBAC role assignments granting the app managed identity `Cognitive Services User` and `Foundry User` on the account/project.
 
 The `azure.yaml` prebuild hook runs `npm ci && npm run build` in `web/frontend`. The postprovision hook (`scripts/setup-agent.sh` / `.ps1`) detects existing Voice Live agents and prints how to enable agent mode; it does not create an agent.
 
@@ -62,8 +62,9 @@ The web app uses two authentication layers:
 
 The browser never receives an Azure token or Voice Live credential. Recommended baseline RBAC for the identity that calls Voice Live is:
 
-- `Cognitive Services User`
-- `Foundry User` / `Azure AI User` as applicable to the Foundry account/project
+- `Cognitive Services User` (`a97b65f3-24c7-4388-baec-2e87135dc908`)
+- `Foundry User` (`53ca6127-db72-4b80-b1b0-d745d6d5456d`) on the Foundry account/project.
+  - **Former name:** The Azure portal may still show this role under its former display name, *Azure AI User* — it is the same role definition, so assign by GUID if the names are confusing.
 
 ## 5. Configuration
 

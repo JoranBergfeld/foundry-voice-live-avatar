@@ -225,6 +225,50 @@ public sealed class DocumentationTests
     }
 
     [Fact]
+    public void Documented_rbac_roles_match_the_bicep_role_assignments()
+    {
+        var root = RepoRoot;
+        var bicep = File.ReadAllText(Path.Combine(root, "infra", "resources.bicep"));
+
+        // If either GUID changes, the role names in the docs are no longer trustworthy.
+        Assert.True(bicep.Contains("a97b65f3-24c7-4388-baec-2e87135dc908", StringComparison.Ordinal),
+            "infra/resources.bicep no longer assigns Cognitive Services User; update the RBAC docs.");
+        Assert.True(bicep.Contains("53ca6127-db72-4b80-b1b0-d745d6d5456d", StringComparison.Ordinal),
+            "infra/resources.bicep no longer assigns Foundry User; update the RBAC docs.");
+
+        // 'Azure AI User' is the retired display name of the Foundry User role
+        // (53ca6127-db72-4b80-b1b0-d745d6d5456d), not a second role. Listing it as an
+        // alternative creates three-document disagreement and confuses new operators.
+        // The ONE permitted mention is on a line whose trimmed text starts with exactly
+        // "- **Former name:**" — the single explanatory note in docs/runbook.md that tells
+        // readers the Azure portal may show the old name. That shape is narrow enough that it
+        // cannot be confused with an allowed-values list or alternative-role framing, and
+        // appending the marker to an offending line does not help because the banned pattern
+        // ("Foundry User` / `Azure AI User" or equivalent) must not appear on that line either.
+        // If you are writing docs/production-deployment.md: list the two roles as
+        // "`Cognitive Services User` and `Foundry User`", not "`Foundry User` / `Azure AI User`".
+        var stale = MaintainedMarkdown()
+            .SelectMany(rel =>
+            {
+                var lines = File.ReadAllLines(Path.Combine(root, rel));
+                return lines
+                    .Select((line, i) => (rel, line, i))
+                    .Where(x => x.line.Contains("Azure AI User", StringComparison.Ordinal)
+                                && !(x.line.TrimStart().StartsWith("- **Former name:**", StringComparison.Ordinal)
+                                     && !x.line.Contains("Foundry User", StringComparison.Ordinal)));
+            })
+            .Select(x => $"{x.rel} line {x.i + 1}: {x.line.Trim()}")
+            .ToList();
+
+        Assert.True(stale.Count == 0,
+            "These lines still list the retired role name 'Azure AI User' as an alternative role. " +
+            "It is the former display name of Foundry User (53ca6127-db72-4b80-b1b0-d745d6d5456d), not a separate role. " +
+            "Use '`Cognitive Services User` and `Foundry User`' instead. " +
+            "One explanatory mention is allowed only on a line whose trimmed text starts with '- **Former name:**'.\n  " +
+            string.Join("\n  ", stale));
+    }
+
+    [Fact]
     public void Every_docs_image_is_referenced_by_maintained_markdown()
     {
         var root = RepoRoot;
