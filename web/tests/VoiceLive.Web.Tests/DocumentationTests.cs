@@ -135,4 +135,61 @@ public sealed class DocumentationTests
             doc.RootElement.TryGetProperty("Auth", out _),
             "appsettings.Development.json must not contain an Auth section. Use `dotnet user-secrets` so credentials are never committed.");
     }
+
+    private static string ConfigSchema() => File.ReadAllText(Path.Combine(RepoRoot, "docs", "config-schema.md"));
+
+    [Fact]
+    public void Config_schema_documents_only_voice_types_the_session_builder_supports()
+    {
+        // Values the app can actually build a session with. `azure-custom` passes WebConfig
+        // validation but throws in SessionOptionsBuilder, so it must not be documented as allowed.
+        string[] buildable = ["azure-realtime-native", "azure-standard", "openai"];
+        string[] notBuildable = ["azure-custom"];
+
+        var schema = ConfigSchema();
+
+        foreach (var value in buildable)
+            Assert.True(schema.Contains($"`{value}`", StringComparison.Ordinal),
+                $"docs/config-schema.md must document supported voice type '{value}'.");
+
+        foreach (var value in notBuildable)
+            Assert.False(schema.Contains($"`{value}`, ", StringComparison.Ordinal) ||
+                         schema.Contains($", `{value}`", StringComparison.Ordinal),
+                $"docs/config-schema.md lists '{value}' as an allowed voice.type, but SessionOptionsBuilder throws on it. " +
+                "Remove it from the allowed-values lists (see review-merged.md H-03 / D-04).");
+    }
+
+    [Fact]
+    public void Agent_config_ships_no_keys_the_code_never_reads()
+    {
+        // Keys with zero references anywhere in the codebase. Shipping them implies behaviour
+        // that does not exist (review-merged.md H-04 / D-03).
+        string[] unimplemented = ["agentVersion", "conversationResumePolicy", "groundingStrategy"];
+
+        var path = Path.Combine(RepoRoot, "config", "agent.json");
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+
+        var present = unimplemented
+            .Where(key => doc.RootElement.TryGetProperty(key, out _))
+            .ToList();
+
+        Assert.True(present.Count == 0,
+            "config/agent.json ships keys that no code reads: " + string.Join(", ", present) +
+            ". Remove them, or implement and validate them.");
+    }
+
+    [Fact]
+    public void Config_schema_documents_no_unimplemented_agent_keys()
+    {
+        string[] unimplemented = ["agentVersion", "conversationResumePolicy", "groundingStrategy"];
+        var schema = ConfigSchema();
+
+        var documented = unimplemented
+            .Where(key => schema.Contains($"`{key}`", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(documented.Count == 0,
+            "docs/config-schema.md documents agent.json keys that no code reads: " + string.Join(", ", documented) +
+            ". The schema also promises they 'fail fast at startup', which is false.");
+    }
 }
