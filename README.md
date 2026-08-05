@@ -121,11 +121,13 @@ dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Username" "<your-u
 dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Password" "<your-password>"
 ```
 
-Then start the app (MSBuild automatically runs `npm ci && npm run build` via the `BuildFrontend` target before the app starts):
+Then start the app from the repository root (MSBuild automatically runs `npm ci && npm run build` via the `BuildFrontend` target before the app starts):
 
 ```bash
-dotnet run --project web/src/VoiceLive.Web
+ConfigDir=$(pwd)/config dotnet run --project web/src/VoiceLive.Web
 ```
+
+`ConfigDir` must be absolute. `dotnet run` sets the app's working directory to the **project** directory, not the directory you invoked it from, so the default relative `config` resolves to `web/src/VoiceLive.Web/config`, which does not exist — the app starts but `/api/health` reports 503 and no session can begin.
 
 Open **http://localhost:5280/** and sign in with the credentials you set above.
 

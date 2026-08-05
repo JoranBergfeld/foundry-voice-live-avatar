@@ -2072,7 +2072,8 @@ Four standard files are absent, and `licence.md` is not detected as a licence by
 
 4. **CONTRIBUTING.md test count** — spec said "90 tests". Actual total is 101. Removed hardcoded count; text now reads "no frontend build" without a number.
 
-5. **CONTRIBUTING.md dotnet run command** — spec omitted `--no-launch-profile`. Task 14 settled that this flag is mandatory. Fixed to `dotnet run --no-launch-profile --project web/src/VoiceLive.Web` with explanatory note.
+5. **CONTRIBUTING.md dotnet run command** — the spec omitted `--no-launch-profile`; an intermediate revision wrongly *added* it, generalising Task 14's rule. Task 14's flag is mandatory only for the `web/README.md` invocation that overrides `ASPNETCORE_URLS` (otherwise the launch profile forces 5280 instead of 5210). For CONTRIBUTING's plain `dotnet run` the flag is actively harmful: verified by execution, it drops `ASPNETCORE_ENVIRONMENT=Development`, so the app runs as Production, the user-secrets provider is never registered, and the two `dotnet user-secrets set` commands above it silently have no effect. Shipped without the flag.
+6. **`ConfigDir` was missing from both CONTRIBUTING and the README quickstart** — verified by execution. `dotnet run` sets the working directory to the *project* directory, so the default relative `config` resolves to `web/src/VoiceLive.Web/config`, which does not exist: the run emits five `not found at config/...` validation errors, the app starts unhealthy and `/api/health` returns 503. Adding `ConfigDir=$(pwd)/config` from the repo root clears all five. Both documents now carry it plus `VoiceLive__Endpoint` / `VoiceLive__Mode`.
 
 6. **CONTRIBUTING.md RBAC scopes** — spec said "Cognitive Services User and Foundry User on the Foundry resource" without scopes. Task 11 settled: `Cognitive Services User` on the **account**, `Foundry User` on the **project**. Fixed.
 
@@ -2151,10 +2152,19 @@ az login
 dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Username" "<your-username>"
 dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Password" "<your-password>"
 
-dotnet run --no-launch-profile --project web/src/VoiceLive.Web
+export VoiceLive__Endpoint="https://<your-resource>.services.ai.azure.com"
+export VoiceLive__Mode=model
+
+# Run from the repository root
+ConfigDir=$(pwd)/config dotnet run --project web/src/VoiceLive.Web
 ```
 
-`--no-launch-profile` is required: `launchSettings.json` pins port 5280 and overrides `ASPNETCORE_URLS`, which conflicts with the documented development port. Without the flag the documented URL does not match where the app listens.
+Then open **http://localhost:5280/** and sign in with the credentials you just set.
+
+Two things about that command are easy to get wrong:
+
+- **`ConfigDir` must be absolute.** `dotnet run` sets the app's working directory to the **project** directory (`web/src/VoiceLive.Web`), not the directory you invoked it from, so the default relative `config` resolves to `web/src/VoiceLive.Web/config`, which does not exist. The app still starts, but `/api/health` reports 503 and no session can begin. Use `$(pwd)/config` from the repository root, or `../../../config`.
+- **Do not add `--no-launch-profile` here.** The launch profile supplies both `ASPNETCORE_ENVIRONMENT=Development` and port 5280. Without it the app runs as **Production**, which means the user-secrets provider is never added and the two `dotnet user-secrets` commands above have no effect. The flag is only appropriate when you deliberately override `ASPNETCORE_URLS`, as [`web/README.md`](web/README.md) does.
 
 The frontend builds automatically as an MSBuild step. Pass `-p:SkipFrontendBuild=true` to skip it when you are only touching server code.
 

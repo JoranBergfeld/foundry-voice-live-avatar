@@ -24,10 +24,19 @@ az login
 dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Username" "<your-username>"
 dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Password" "<your-password>"
 
-dotnet run --no-launch-profile --project web/src/VoiceLive.Web
+export VoiceLive__Endpoint="https://<your-resource>.services.ai.azure.com"
+export VoiceLive__Mode=model
+
+# Run from the repository root
+ConfigDir=$(pwd)/config dotnet run --project web/src/VoiceLive.Web
 ```
 
-`--no-launch-profile` is required: `launchSettings.json` pins port 5280 and overrides `ASPNETCORE_URLS`, which conflicts with the documented development port. Without the flag the documented URL does not match where the app listens.
+Then open **http://localhost:5280/** and sign in with the credentials you just set.
+
+Two things about that command are easy to get wrong:
+
+- **`ConfigDir` must be absolute.** `dotnet run` sets the app's working directory to the **project** directory (`web/src/VoiceLive.Web`), not the directory you invoked it from, so the default relative `config` resolves to `web/src/VoiceLive.Web/config`, which does not exist. The app still starts, but `/api/health` reports 503 and no session can begin. Use `$(pwd)/config` from the repository root, or `../../../config`.
+- **Do not add `--no-launch-profile` here.** The launch profile supplies both `ASPNETCORE_ENVIRONMENT=Development` and port 5280. Without it the app runs as **Production**, which means the user-secrets provider is never added and the two `dotnet user-secrets` commands above have no effect. The flag is only appropriate when you deliberately override `ASPNETCORE_URLS`, as [`web/README.md`](web/README.md) does.
 
 The frontend builds automatically as an MSBuild step. Pass `-p:SkipFrontendBuild=true` to skip it when you are only touching server code.
 
