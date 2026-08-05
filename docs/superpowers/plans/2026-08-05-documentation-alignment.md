@@ -322,13 +322,23 @@ Append inside the `DocumentationTests` class:
 ```csharp
     private static string ConfigSchema() => File.ReadAllText(Path.Combine(RepoRoot, "docs", "config-schema.md"));
 
+    // Keys with zero references anywhere in the codebase. Shipping or documenting them implies
+    // behaviour that does not exist (review-merged.md H-04 / D-03).
+    // Must be updated in sync with any future implementation work.
+    private static readonly string[] UnimplementedAgentKeys =
+        ["agentVersion", "conversationResumePolicy", "groundingStrategy"];
+
     [Fact]
     public void Config_schema_documents_only_voice_types_the_session_builder_supports()
     {
-        // Values the app can actually build a session with. `azure-custom` passes WebConfig
-        // validation but throws in SessionOptionsBuilder, so it must not be documented as allowed.
+        // Values the app can actually build a session with.
+        // Source of truth 1 (accepted set): web/src/VoiceLive.Web/Config/WebConfig.cs line 22
+        //   private static readonly string[] VoiceTypes = ["azure-realtime-native", "azure-standard", "azure-custom", "openai"];
+        // Source of truth 2 (buildable set): web/src/VoiceLive.Web/Session/SessionOptionsBuilder.cs lines 51-56
+        //   "azure-custom" throws; the other three build successfully.
+        // Both sources are private so they cannot be referenced directly here. Keep these lists
+        // in sync whenever WebConfig.cs or SessionOptionsBuilder.cs change.
         string[] buildable = ["azure-realtime-native", "azure-standard", "openai"];
-        string[] notBuildable = ["azure-custom"];
 
         var schema = ConfigSchema();
 
@@ -336,24 +346,35 @@ Append inside the `DocumentationTests` class:
             Assert.True(schema.Contains($"`{value}`", StringComparison.Ordinal),
                 $"docs/config-schema.md must document supported voice type '{value}'.");
 
-        foreach (var value in notBuildable)
-            Assert.False(schema.Contains($"`{value}`, ", StringComparison.Ordinal) ||
-                         schema.Contains($", `{value}`", StringComparison.Ordinal),
-                $"docs/config-schema.md lists '{value}' as an allowed voice.type, but SessionOptionsBuilder throws on it. " +
-                "Remove it from the allowed-values lists (see review-merged.md H-03 / D-04).");
+        // `azure-custom` passes WebConfig startup validation but SessionOptionsBuilder always
+        // throws on it (no custom-voice endpoint id configured). It must not be documented as
+        // an allowed value in any format — bullet list, table row, inline list, or prose.
+        // The ONLY permitted mention is on a line that also contains the text "Known trap"
+        // (see Task 8 for the exact approved line). Any other occurrence means the doc is
+        // incorrectly advertising a value that fails every session at connect time.
+        var schemaLines = schema.Split('\n');
+        var badLines = schemaLines
+            .Select((line, i) => (line, i))
+            .Where(x => x.line.Contains("`azure-custom`", StringComparison.Ordinal)
+                        && !x.line.Contains("Known trap", StringComparison.Ordinal))
+            .Select(x => $"line {x.i + 1}: {x.line.Trim()}")
+            .ToList();
+
+        Assert.True(badLines.Count == 0,
+            "`azure-custom` is accepted by startup validation but always throws in SessionOptionsBuilder " +
+            "(no custom-voice endpoint id configured), so it must not be documented as an allowed voice.type. " +
+            "The only permitted mention is on a line explicitly marked 'Known trap'. " +
+            "Offending lines:\n  " + string.Join("\n  ", badLines) +
+            "\nSee review-merged.md H-03 / D-04.");
     }
 
     [Fact]
     public void Agent_config_ships_no_keys_the_code_never_reads()
     {
-        // Keys with zero references anywhere in the codebase. Shipping them implies behaviour
-        // that does not exist (review-merged.md H-04 / D-03).
-        string[] unimplemented = ["agentVersion", "conversationResumePolicy", "groundingStrategy"];
-
         var path = Path.Combine(RepoRoot, "config", "agent.json");
         using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
 
-        var present = unimplemented
+        var present = UnimplementedAgentKeys
             .Where(key => doc.RootElement.TryGetProperty(key, out _))
             .ToList();
 
@@ -365,10 +386,9 @@ Append inside the `DocumentationTests` class:
     [Fact]
     public void Config_schema_documents_no_unimplemented_agent_keys()
     {
-        string[] unimplemented = ["agentVersion", "conversationResumePolicy", "groundingStrategy"];
         var schema = ConfigSchema();
 
-        var documented = unimplemented
+        var documented = UnimplementedAgentKeys
             .Where(key => schema.Contains($"`{key}`", StringComparison.Ordinal))
             .ToList();
 
@@ -645,7 +665,7 @@ with:
 
 Run: `dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true --filter "FullyQualifiedName~Config_schema_documents_only_voice_types"`
 
-Expected: **PASS.** The test fails only when the backticked literal sits in a comma-separated allowed-values list — that is, when the document contains `` `azure-custom`, `` or `` , `azure-custom` ``. The prose warning above is deliberately worded so the literal is **not** immediately followed by a comma, which is why it is permitted. If you reword that warning, keep that property or you will re-trip the test you are trying to satisfy.
+Expected: **PASS.** The test checks that `` `azure-custom` `` does not appear on any line unless that line also contains the text `Known trap`. The `Known trap` bullet added in Step 2 above satisfies that rule exactly. Any other occurrence — in a field table row, a bullet list, a comma-separated inline list, or plain prose — will trip the test. If you reword the warning, keep `Known trap` in the same line or the test will fail.
 
 - [ ] **Step 4: Commit**
 
