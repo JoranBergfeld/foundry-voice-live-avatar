@@ -1187,7 +1187,7 @@ Four defects: no document names a test command, `web/README.md` ships a personal
 - Modify: `README.md`
 - Modify: `docs/runbook.md`
 
-- [ ] **Step 1: Fix the hardcoded absolute path (D-15)**
+- [x] **Step 1: Fix the hardcoded absolute path (D-15)**
 
 In `web/README.md`, replace the absolute path with a repo-relative one:
 
@@ -1198,35 +1198,60 @@ ConfigDir=$(pwd)/config ASPNETCORE_URLS=http://127.0.0.1:5210 dotnet run --proje
 Add immediately below it:
 
 ```markdown
-Run this from the repository root. `ConfigDir` must be an absolute path, which is why `$(pwd)` is used rather than `./config`.
+Run this from the repository root. `$(pwd)/config` makes the path explicit; a relative `./config` also works when the working directory is the repo root.
 ```
 
-- [ ] **Step 2: Verify the path is gone**
+> **Spec deviation — Step 1 explanatory note:** The spec claimed `ConfigDir` *must* be absolute. Verification shows `appsettings.json` defaults to `"ConfigDir": "config"` (relative) and `Path.Combine` resolves it from the process CWD. A relative path works when running from the repo root. The note was corrected to be accurate.
+
+- [x] **Step 2: Verify the path is gone**
 
 Run: `grep -rn "/home/" README.md web/README.md docs/*.md`
 
-Expected: **no output.**
+Expected: **no output.** ✓ confirmed.
 
-- [ ] **Step 3: Add prerequisite verification to the README quickstart (D-16)**
+- [x] **Step 3: Add prerequisite verification to the README quickstart (D-16)**
 
 In `README.md`, at the start of the quickstart section, insert:
 
-````markdown
-Verify the toolchain and your Azure access before the first run — a missing role assignment is the most common first-run failure:
-
 ```bash
 dotnet --version   # 10.0 or later
-node --version     # 20 or later
+node --version     # 24 or later
 python3 --version  # required by the Playwright suite's static file server
 az account show --query '{sub:name, user:user.name}' -o table
 az role assignment list --assignee "$(az ad signed-in-user show --query id -o tsv)" \
-  --query "[].roleDefinitionName" -o tsv
+  --all --query "[].roleDefinitionName" -o tsv
 ```
 
-The last command must list **Cognitive Services User** and **Foundry User**. If it does not, session creation will fail at connect time with a `403` even though `/api/health` reports Healthy.
-````
+> **Spec deviation — Step 3 `az` command:** The spec omitted `--all`. `az role assignment list` without `--all` scopes to the subscription only; the Bicep assigns `Cognitive Services User` and `Foundry User` at the Foundry account and project resource scopes. Running the command without `--all` returned empty output on this subscription. `--all` was added. Verified by running both forms.
+>
+> **Spec deviation — Step 3 Node version:** The spec said `# 20 or later`; the README prerequisites list "Node.js 24" and the runtime is v24.14.1. Changed to `# 24 or later`.
 
-- [ ] **Step 4: Explain `session.sample.json` (D-16)**
+- [x] **Step 4: Explain `session.sample.json` (D-16)**
+
+Confirmed excluded from publish in `.csproj` line 26. Done.
+
+- [x] **Step 5: Add a Development section pointing at the tests (D-14)**
+
+Done. Section inserted directly before `## Production readiness`. Heading order confirmed: `## Development` (144) → `## Production readiness` (159) → `## Deploy to Azure` (179).
+
+- [x] **Step 6: Remove point-in-time test evidence from the runbook (D-21)**
+
+Done. Replaced past-tense result with procedure.
+
+- [x] **Step 7: Verify the documented commands actually work**
+
+`dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true`: 98 passed / 2 failed / 100 total. Failures: `Every_docs_image_is_referenced_by_maintained_markdown` and `Maintained_markdown_has_no_broken_relative_links` (six permitted entries). ✓
+
+`npm --prefix web/frontend run typecheck`: exit 0. ✓
+
+Playwright uses `python3 -m http.server` (confirmed in `playwright.config.ts`). Python 3.12.3 present.
+
+- [x] **Step 8: Commit**
+
+```bash
+git add README.md web/README.md docs/runbook.md
+git commit -m "docs: fix getting-started gaps — test commands, prereq checks, portable paths"
+```
 
 In the `README.md` config-directory listing, replace the `session.sample.json` description with:
 
@@ -1234,60 +1259,7 @@ In the `README.md` config-directory listing, replace the `session.sample.json` d
 - `session.sample.json` — a reference copy of `session.json`, excluded from publish. Copy it over `session.json` to return to known-good settings after experimenting, and diff against it when a config change causes a startup validation failure.
 ```
 
-- [ ] **Step 5: Add a Development section pointing at the tests (D-14)**
-
-In `README.md`, insert a new section directly before `## Production readiness`:
-
-````markdown
-## Development
-
-Full setup, prerequisites and conventions are in [CONTRIBUTING.md](CONTRIBUTING.md). The commands you need most:
-
-```bash
-# Backend tests — skip the frontend build for speed, as CI does
-dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true
-
-# Frontend type check
-npm --prefix web/frontend run typecheck
-
-# Playwright end-to-end tests (requires Python 3 on PATH for the static server)
-npm --prefix web/frontend test
-```
-````
-
-- [ ] **Step 6: Remove point-in-time test evidence from the runbook (D-21)**
-
-In `docs/runbook.md` §7, delete this sentence entirely:
-
-```markdown
-A headless browser E2E reached WebRTC `connected` state with video and audio tracks arriving, and the safe-question path produced streaming transcripts plus a completed response.
-```
-
-Replace it with procedure rather than a past result:
-
-```markdown
-To confirm the avatar path end to end, run the Playwright suite (`npm --prefix web/frontend test`) and watch the WebRTC status indicator reach **connected** in the operator view, with video and audio tracks arriving and a safe question producing streaming transcripts followed by a completed response.
-```
-
-- [ ] **Step 7: Verify the documented commands actually work**
-
-Run each and confirm it is a real target:
-
-```bash
-dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true
-npm --prefix web/frontend run typecheck
-```
-
-Expected: backend tests pass except the still-outstanding `Every_docs_image_is_referenced_by_maintained_markdown` (Task 17) and the link guard (see the forward-reference table). `npm run typecheck` runs `tsc --noEmit` and exits 0.
-
-Note `npm --prefix web/frontend test` runs `typecheck && test:e2e`, and `test:e2e` builds the bundle then runs Playwright — so it needs Python 3 on `PATH`. That is why Step 3 adds `python3 --version` to the prerequisite checks.
-
-- [ ] **Step 8: Commit**
-
-```bash
-git add README.md web/README.md docs/runbook.md
-git commit -m "docs: fix getting-started gaps — test commands, prereq checks, portable paths"
-```
+> Steps 5–8 recorded above in the updated task summary.
 
 ---
 

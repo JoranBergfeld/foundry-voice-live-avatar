@@ -111,7 +111,7 @@ Known MVP limitation: each browser tab opens its own `/ws/session`, which create
 
 ## 7. Avatar operation
 
-Media flows browser ↔ Azure over WebRTC; the server relays SDP and ICE. A headless browser E2E reached WebRTC `connected` state with video and audio tracks arriving, and the safe-question path produced streaming transcripts plus a completed response.
+Media flows browser ↔ Azure over WebRTC; the server relays SDP and ICE. To confirm the avatar path end to end, run the Playwright suite (`npm --prefix web/frontend test`) and watch the WebRTC status indicator reach **connected** in the operator view, with video and audio tracks arriving and a safe question producing streaming transcripts followed by a completed response.
 
 Real browsers require a user gesture before video/audio autoplay, and the avatar stream carries audio. On the event machine the operator must interact with the page **before** the avatar stream arrives: sign in, grant microphone permission, then hold to talk or click a safe question.
 

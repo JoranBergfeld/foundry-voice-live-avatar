@@ -92,6 +92,19 @@ flowchart LR
 - Access to a Voice Live / avatar-capable Azure AI Foundry resource
 - `Cognitive Services User` and `Foundry User` roles on the resource
 
+Verify the toolchain and your Azure access before the first run — a missing role assignment is the most common first-run failure:
+
+```bash
+dotnet --version   # 10.0 or later
+node --version     # 24 or later
+python3 --version  # required by the Playwright suite's static file server
+az account show --query '{sub:name, user:user.name}' -o table
+az role assignment list --assignee "$(az ad signed-in-user show --query id -o tsv)" \
+  --all --query "[].roleDefinitionName" -o tsv
+```
+
+The last command must list **Cognitive Services User** and **Foundry User**. If it does not, session creation will fail at connect time with a `403` even though `/api/health` reports Healthy.
+
 **Steps**
 
 ```bash
@@ -127,6 +140,21 @@ curl -s http://localhost:5280/api/health; echo
 ```
 
 `DefaultAzureCredential` picks up your `az login` token locally and the system-assigned managed identity in Azure. If the token expires, restart the session; the credential refreshes automatically between sessions. If avatar capacity is unavailable the server sends an `avatar-error` frame — **avatar audio is lost along with the video** (both ride the same WebRTC peer connection), so there is no voice-only fallback at this time. The operator must invoke a fallback plan (see [runbook §9](docs/runbook.md#9-failure-handling)).
+
+## Development
+
+Full setup, prerequisites and conventions are in [CONTRIBUTING.md](CONTRIBUTING.md). The commands you need most:
+
+```bash
+# Backend tests — skip the frontend build for speed, as CI does
+dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true
+
+# Frontend type check
+npm --prefix web/frontend run typecheck
+
+# Playwright end-to-end tests (requires Python 3 on PATH for the static server)
+npm --prefix web/frontend test
+```
 
 ## Production readiness
 
@@ -245,7 +273,7 @@ config/
   agent.json          # agent mode: agent/project name, safe questions
   avatar.json         # avatar character, style, background
   session.json        # model, voice, noise reduction, transcription flags
-  session.sample.json # sample session config excluded from publish
+  session.sample.json # a reference copy of `session.json`, excluded from publish. Copy it over `session.json` to return to known-good settings after experimenting, and diff against it when a config change causes a startup validation failure.
   turntaking.json     # mode (gated/open-mic/hybrid) and thresholds
   grounding/          # grounding documents loaded into session context
 ```
