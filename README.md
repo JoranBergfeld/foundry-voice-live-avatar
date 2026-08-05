@@ -153,7 +153,15 @@ sequenceDiagram
 - **Cookie authentication** — 8-hour sliding session, HttpOnly, SameSite=Lax, Secure outside development.
 - **Login rate limiting** — fixed-window 5 attempts / minute per IP; returns 429.
 - **HSTS and HTTPS redirect** — enabled outside development.
-- **CSP and security headers** — `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, and a strict `Content-Security-Policy` on every response.
+- **Security headers** — `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and a `Content-Security-Policy` on every response:
+
+  ```
+  default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:;
+  connect-src 'self' wss: https:; script-src 'self'; style-src 'self' 'unsafe-inline';
+  worker-src 'self' blob:
+  ```
+
+  Note the current policy is **not** maximally strict: `connect-src` permits any HTTPS/WSS host, `style-src` permits inline styles because `index.html` inlines its CSS, and `frame-ancestors`, `base-uri`, `form-action` and `object-src` are not set. Tracked as finding M-11 in [`review-merged.md`](review-merged.md).
 - **WebSocket middleware** — origin validation against `AllowedOrigins` (same-origin allowed by default), 30-second keepalive, concurrent-session gate.
 - **Config health** — `ConfigHealthCheck` reports unhealthy if config failed to load at startup.
 - **DefaultAzureCredential** — single token credential instance shared across sessions; supports `AZURE_CLIENT_ID` for managed identity client ID.

@@ -730,7 +730,7 @@ git commit -m "docs: remove azure-custom from supported voice types"
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: Replace the security-headers bullet**
+- [x] **Step 1: Replace the security-headers bullet**
 
 In `README.md`, replace:
 
@@ -752,13 +752,13 @@ with:
   Note the current policy is **not** maximally strict: `connect-src` permits any HTTPS/WSS host, `style-src` permits inline styles because `index.html` inlines its CSS, and `frame-ancestors`, `base-uri`, `form-action` and `object-src` are not set. Tracked as finding M-11 in [`review-merged.md`](review-merged.md).
 ````
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 Run: `grep -rn "strict \`Content-Security-Policy\`\|strict CSP" README.md web/README.md docs/*.md`
 
 Expected: **no output.**
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add README.md
