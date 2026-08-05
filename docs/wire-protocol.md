@@ -56,7 +56,7 @@ All are JSON text frames with a `t` discriminator.
 | `avatar-idle` | `{ "t": "avatar-idle" }` | Avatar finished speaking. |
 | `avatar-answer` | `{ "t": "avatar-answer", "sdp": string }` | WebRTC answer (SDP string decoded from the base64-wrapped JSON the service returns). The browser applies it as the remote description. |
 | `response-done` | `{ "t": "response-done" }` | The turn's response is complete. |
-| `tool` | `{ "t": "tool", "phase": string, "name": string | null, "callId": string | null }` | Tool invocation progress. `phase` values include `"args"`, `"done"`, `"list"`, `"list-done"`, `"list-failed"`. `name` is non-null only for phase `"done"`; `callId` is always present. Hosted tools may emit no client event at all. |
+| `tool` | `{ "t": "tool", "phase": string, "name": string \| null, "callId": string \| null }` | Tool invocation progress. `phase` values include `"args"`, `"done"`, `"list"`, `"list-done"`, `"list-failed"`. `name` is non-null only for phase `"done"`; `callId` is always present. Hosted tools may emit no client event at all. |
 | `avatar-error` | `{ "t": "avatar-error", "code"?: string, "message": string }` | **Non-fatal to the WebSocket session.** Avatar capacity or quota exhausted. The server closes the `RTCPeerConnection`; both avatar video **and audio** are lost (both transceivers ride the same peer connection). The WebSocket, microphone capture, and transcripts survive, but there is no audible output to the room. **There is no voice-only fallback.** Operators must invoke a fallback plan. See finding L-14 and runbook §9. |
 | `error` | `{ "t": "error", "message": string }` | **Fatal.** The session is over. The client shows an error banner and reveals **Reconnect**. |
 | `pong` | `{ "t": "pong" }` | Reply to `ping`. |

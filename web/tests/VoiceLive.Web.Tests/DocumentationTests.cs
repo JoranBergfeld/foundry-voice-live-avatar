@@ -410,4 +410,77 @@ public sealed class DocumentationTests
             "Unreferenced images in docs/images — wire them into a document or delete them:\n  "
                 + string.Join("\n  ", orphans));
     }
+
+    [Fact]
+    public void Maintained_markdown_tables_have_consistent_column_counts()
+    {
+        var root = RepoRoot;
+        var offenders = new List<string>();
+
+        foreach (var rel in MaintainedMarkdown())
+        {
+            var lines = File.ReadAllLines(Path.Combine(root, rel));
+            var inFence = false;
+            var block = new List<(int Line, int Columns)>();
+
+            void Flush()
+            {
+                if (block.Count >= 2)
+                {
+                    var expected = block[0].Columns;
+                    offenders.AddRange(block
+                        .Where(row => row.Columns != expected)
+                        .Select(row =>
+                            $"{rel}:{row.Line} — header declares {expected - 1} columns, row has {row.Columns - 1}"));
+                }
+
+                block.Clear();
+            }
+
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var trimmed = lines[i].Trim();
+
+                if (trimmed.StartsWith("```", StringComparison.Ordinal))
+                {
+                    inFence = !inFence;
+                    Flush();
+                    continue;
+                }
+
+                if (inFence) continue;
+
+                if (trimmed.StartsWith('|') && trimmed.EndsWith('|') && trimmed.Length > 1)
+                {
+                    block.Add((i + 1, CountCellDelimiters(trimmed)));
+                }
+                else
+                {
+                    Flush();
+                }
+            }
+
+            Flush();
+        }
+
+        Assert.True(offenders.Count == 0,
+            "Markdown table rows whose cell count disagrees with their header. GitHub splits table cells on '|' "
+                + "*before* parsing inline code, so a pipe inside backticks still breaks the row — escape it as '\\|':\n  "
+                + string.Join("\n  ", offenders));
+    }
+
+    // Counts only the pipes GitHub treats as cell delimiters: a backslash-escaped pipe is literal
+    // content, even inside a code span.
+    private static int CountCellDelimiters(string line)
+    {
+        var count = 0;
+        for (var i = 0; i < line.Length; i++)
+        {
+            if (line[i] != '|') continue;
+            if (i > 0 && line[i - 1] == '\\') continue;
+            count++;
+        }
+
+        return count;
+    }
 }
