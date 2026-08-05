@@ -46,6 +46,8 @@ Consequences of that use case, which shape every decision below:
 - `GET /api/config` — authenticated browser-safe config.
 - `WS /ws/session` — authenticated server-side Voice Live bridge.
 
+> **Authoritative reference:** [`docs/wire-protocol.md`](wire-protocol.md) documents the full endpoint list, frame shapes, and per-view restrictions and is kept accurate against the current implementation. This section is a historical snapshot only.
+
 **Two views:**
 
 | | Display view | Operator view |

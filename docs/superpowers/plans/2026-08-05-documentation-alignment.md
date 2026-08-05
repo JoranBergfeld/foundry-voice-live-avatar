@@ -1496,7 +1496,28 @@ git commit -m "docs: add production deployment guide"
 
 ## Task 16: D-11, D-24 — one authoritative wire-protocol reference ✅
 
-**Shipped.** Created `docs/wire-protocol.md` as the authoritative reference for `/ws/session`, replaced the endpoint/frame tables in `web/README.md` with a single link, and added a pointer in `README.md` after its existing frame summary tables.
+Created `docs/wire-protocol.md` as the authoritative reference for `/ws/session`, replaced the endpoint/frame tables in `web/README.md` with a single link, and added a pointer in `README.md` after its existing frame summary tables.
+
+**Files modified:** `docs/wire-protocol.md` (created), `web/README.md`, `README.md`
+
+- [x] **Step 1: Create `docs/wire-protocol.md`**
+
+  Create the document with the endpoints table, lifecycle narrative, browser→server frame table, server→browser frame table, `ReadyConfig`/`ClientConfig`/`IceServer` field tables, and per-view frame restrictions table. Verify all frame shapes, field names, and semantics against source before committing.
+
+- [x] **Step 2: De-duplicate `web/README.md`**
+
+  Replace the endpoint table and frame vocabulary with a single link to `docs/wire-protocol.md`.
+
+- [x] **Step 3: Add pointer in `README.md`**
+
+  After the existing server→browser frame summary, add a sentence pointing at `docs/wire-protocol.md` as authoritative.
+
+- [x] **Step 4: Commit**
+
+  ```bash
+  git add docs/wire-protocol.md web/README.md README.md
+  git commit -m "docs: add authoritative wire-protocol reference (D-11, D-24)"
+  ```
 
 **Discrepancies found and corrected (spec vs. source):**
 
@@ -1508,19 +1529,17 @@ git commit -m "docs: add production deployment guide"
 
 4. **`avatar-error` semantics**: The spec said "voice-only fallback" and "voice continues". The actual `handleAvatarError` closes the `RTCPeerConnection`; both audio and video are lost. The shipped document states: "There is no voice-only fallback." Correct per `main.ts` comment and task constraints.
 
-5. **Missing endpoint `/api/config`**: `Program.cs` maps `GET /api/config` (cookie-authenticated, returns browser-safe config). The spec omitted it; added to the endpoints table.
+5. **Missing endpoint `/api/config`**: `Program.cs` maps `GET /api/config` (cookie-authenticated, returns browser-safe config as the `ClientConfig` record). The spec omitted it; added to the endpoints table with the full nine-field schema.
 
 6. **Stale verification claim**: The spec said `d5110dc`; current HEAD of `docs-alignment` is `d657e86`. Replaced with accurate commit reference.
 
-7. **`tool` phase values not enumerated**: The spec said only `phase: string`. The bridge emits `"args"`, `"done"`, `"list"`, `"list-done"`, `"list-failed"`. Listed in the shipped document.
+7. **`tool` phase values not enumerated**: The spec said only `phase: string`. The bridge emits `"args"`, `"done"`, `"list"`, `"list-done"`, `"list-failed"`. Listed in the shipped document. `name` and `callId` are always serialised (nulls included per `JsonSerializerDefaults.Web`); `name` is non-null only for phase `"done"`.
 
-8. **`activeMode` values**: The spec listed `"gated"`, `"open"`, `"hybrid"`. Server code uses `"gated"`, `"open-mic"`, `"hybrid"` (verified in `prepareMicrophone` and `SessionModeResolver`). Fixed.
+8. **`activeMode` values**: The spec listed `"gated"`, `"open"`, `"hybrid"`. Server config uses `"gated"`, `"open-mic"`, `"hybrid"` (verified in `ServerSessionConfig.cs` and `prepareMicrophone`). Fixed. Note: `activeMode` in the `ready` payload comes from `config.TurnTaking.ActiveMode`; `SessionModeResolver` resolves `"model"`/`"agent"` mode, not turn-taking mode.
 
-9. **`agentName` nullability**: The spec said `string or null`. The C# anonymous record emits `agentName = config.Agent.AgentName` which is a non-nullable string (empty in model mode). TypeScript `ReadyConfig` defines it as `string`. Updated to `string`.
+9. **`agentName` is required, never empty**: `ServerSessionConfig.cs:104` calls `RequireServer(agent.AgentName, ...)` with no mode guard; the app will not start without it in either mode. The `ReadyConfig` row documents it as `string` with no nullability caveat.
 
 10. **`IceServer` shape**: Added explicit `IceServer` table (`urls: string[]`, `username?: string`, `credential?: string`) to match `BuildIceServers` output.
-
-**Files modified:** `docs/wire-protocol.md` (created), `web/README.md`, `README.md`
 
 ---
 

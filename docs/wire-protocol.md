@@ -13,9 +13,9 @@ Verified against `web/frontend/src/main.ts`, `web/frontend/src/views.ts`, `web/s
 | `GET` | `/` | Cookie | Application shell. `?view=operator`, `?view=display`, or the default landing view. |
 | `GET` | `/login` | Anonymous | Sign-in form. |
 | `POST` | `/login` | Anonymous | Credential submission; issues the auth cookie. |
-| `POST` | `/logout` | Cookie | Clears the auth cookie. |
+| `POST` | `/logout` | Anonymous | Clears the auth cookie. Deliberately exempted from the authentication middleware (see `Program.cs:95-97`); note finding H-02. |
 | `GET` | `/api/health` | Anonymous | Health and configuration-validity report. Returns 200 when config is valid; 503 when config failed to load. |
-| `GET` | `/api/config` | Cookie | Browser-safe config JSON (region, model, turn-taking, avatar settings, agent metadata, safe questions). |
+| `GET` | `/api/config` | Cookie | Browser-safe config JSON (region, API version, model, voice, avatar settings, turn-taking mode, agent metadata, safe questions). See [`ClientConfig`](#clientconfig) below. |
 | `GET` | `/ws/session` | Cookie | WebSocket upgrade. One connection = one Voice Live session = one concurrency slot. |
 
 ## Connection lifecycle
@@ -37,7 +37,7 @@ Verified against `web/frontend/src/main.ts`, `web/frontend/src/views.ts`, `web/s
 | `avatar-offer` | `{ "t": "avatar-offer", "sdp": string }` | Unconditionally, once, immediately after `ready`, by all views including display. |
 | `start-turn` | `{ "t": "start-turn" }` | Operator presses **Hold to talk** (gated mode). **Interactive views only.** |
 | `end-turn` | `{ "t": "end-turn" }` | Operator releases **Hold to talk**. **Interactive views only.** |
-| `barge-in` | `{ "t": "barge-in" }` | Operator presses **Stop speaking** to interrupt avatar speech. **Interactive views only.** |
+| `barge-in` | `{ "t": "barge-in" }` | Operator presses **Stop speaking** to interrupt avatar speech. **Operator view only.** |
 | `say` | `{ "t": "say", "text": string }` | Safe-question injection (one-click buttons or **Repeat**). **Unconstrained today** — see finding H-01. **Operator view only.** |
 | `ping` | `{ "t": "ping" }` | Keepalive, sent every 25 s. Answered with `pong`. |
 
@@ -47,32 +47,48 @@ All are JSON text frames with a `t` discriminator.
 
 | Frame | Payload | Meaning |
 |---|---|---|
-| `ready` | `{ "t": "ready", "config": ClientConfig, "iceServers": IceServer[] }` | Session established. Always the first frame. |
-| `user-transcript` | `{ "t": "user-transcript", "text": string, "final": boolean }` | Speech-to-text of the operator. `final: false` frames are interim and are replaced, not appended. |
-| `agent-transcript` | `{ "t": "agent-transcript", "text": string, "final": boolean }` | The avatar's response text; emitted from both audio-transcript and text-delta update paths. Same interim semantics. |
+| `ready` | `{ "t": "ready", "config": ReadyConfig, "iceServers": IceServer[] }` | Session established. Always the first frame. |
+| `user-transcript` | `{ "t": "user-transcript", "text": string, "final": boolean }` | Speech-to-text of the operator. `final: false` frames carry a delta that must be **appended** to the live transcript line; the `final: true` frame carries the complete transcript and **replaces** the accumulated text. |
+| `agent-transcript` | `{ "t": "agent-transcript", "text": string, "final": boolean }` | The avatar's response text; emitted from both audio-transcript and text-delta update paths. `final: false` frames carry a delta to append; `final: true` carries the complete text and replaces the accumulated line. |
 | `speech-started` | `{ "t": "speech-started" }` | Server-side VAD detected speech. |
 | `speech-stopped` | `{ "t": "speech-stopped" }` | Server-side VAD detected end of speech. |
 | `avatar-speaking` | `{ "t": "avatar-speaking" }` | Avatar audio playback began. |
 | `avatar-idle` | `{ "t": "avatar-idle" }` | Avatar finished speaking. |
 | `avatar-answer` | `{ "t": "avatar-answer", "sdp": string }` | WebRTC answer (SDP string decoded from the base64-wrapped JSON the service returns). The browser applies it as the remote description. |
 | `response-done` | `{ "t": "response-done" }` | The turn's response is complete. |
-| `tool` | `{ "t": "tool", "phase": string, "name"?: string, "callId"?: string }` | Tool invocation progress. `phase` values include `"args"`, `"done"`, `"list"`, `"list-done"`, `"list-failed"`. Hosted tools may emit no client event at all. |
-| `avatar-error` | `{ "t": "avatar-error", "code"?: string, "message": string }` | **Non-fatal to the WebSocket session.** Avatar capacity or quota exhausted. The server closes the `RTCPeerConnection`; both avatar video **and audio** are lost (both transceivers ride the same peer connection). The WebSocket, microphone capture, and transcripts survive, but there is no audible output to the room. **There is no voice-only fallback.** Operators must invoke a fallback plan. See finding M-06 and runbook §9. |
+| `tool` | `{ "t": "tool", "phase": string, "name": string | null, "callId": string | null }` | Tool invocation progress. `phase` values include `"args"`, `"done"`, `"list"`, `"list-done"`, `"list-failed"`. `name` is non-null only for phase `"done"`; `callId` is always present. Hosted tools may emit no client event at all. |
+| `avatar-error` | `{ "t": "avatar-error", "code"?: string, "message": string }` | **Non-fatal to the WebSocket session.** Avatar capacity or quota exhausted. The server closes the `RTCPeerConnection`; both avatar video **and audio** are lost (both transceivers ride the same peer connection). The WebSocket, microphone capture, and transcripts survive, but there is no audible output to the room. **There is no voice-only fallback.** Operators must invoke a fallback plan. See finding L-14 and runbook §9. |
 | `error` | `{ "t": "error", "message": string }` | **Fatal.** The session is over. The client shows an error banner and reveals **Reconnect**. |
 | `pong` | `{ "t": "pong" }` | Reply to `ping`. |
 
-### `ClientConfig`
+### `ReadyConfig`
 
-Sent inside `ready`. Serialised from an anonymous C# record with `JsonSerializerDefaults.Web` (camelCase).
+Sent inside `ready`. Serialised from an anonymous object (`VoiceLiveWebSocketBridge.cs:109-117`) with `JsonSerializerDefaults.Web` (camelCase). The TypeScript type is `ReadyConfig` (`views.ts:1`).
 
 | Field | Type | Notes |
 |---|---|---|
 | `mode` | string | Configured mode (`"model"` or `"agent"`). |
 | `activeMode` | string | Turn-taking mode actually in force: `"gated"`, `"open-mic"`, or `"hybrid"`. |
-| `agentName` | string | Agent name; empty string in model mode. |
+| `agentName` | string | Agent name. Required in all modes; `ServerSessionConfig.cs:104` calls `RequireServer` unconditionally. |
 | `safeQuestions` | string[] | Rendered as one-click buttons in the operator view. |
 | `avatarCharacter` | string | Avatar character id. |
 | `avatarStyle` | string | Avatar style id. |
+
+### `ClientConfig`
+
+Returned by `GET /api/config`. Serialised from the `ClientConfig` record (`WebConfig.cs:7-16`) by ASP.NET Core minimal APIs with `JsonSerializerDefaults.Web` (camelCase).
+
+| Field | Type | Notes |
+|---|---|---|
+| `region` | string | Azure region for the Voice Live endpoint. |
+| `apiVersion` | string | API version string (e.g. `"2025-10-01"`). |
+| `model` | string | Model deployment name. |
+| `voice` | `{ type: string, name: string }` | Voice type and name. |
+| `avatar` | object | Raw avatar configuration (passed through as a `JsonElement`). |
+| `activeMode` | string | Turn-taking mode in force (`"gated"`, `"open-mic"`, or `"hybrid"`). |
+| `agentName` | string | Agent name. |
+| `agentProjectName` | string | Agent project name. |
+| `safeQuestions` | string[] | Safe-question allow-list. |
 
 ### `IceServer`
 
@@ -86,11 +102,11 @@ Sent inside `ready.iceServers`.
 
 ## Per-view frame restrictions
 
-| View | URL | Can send turn frames? | Notes |
-|---|---|---|---|
-| Landing | `/` | **Yes** (gated or open-mic/hybrid) | Default fullscreen avatar; mute-toggle available in non-gated modes. |
-| Operator | `/?view=operator` | **Yes** (gated or open-mic/hybrid) | Full control console with transcripts, safe questions, barge-in, tool activity. |
-| Display | `/?view=display` | **No** | `prepareMicrophone` and `wireInteractiveControls` return immediately for non-interactive views. Opens a WebSocket and receives `ready`; initiates WebRTC negotiation for avatar video; cannot send `start-turn`, `end-turn`, `barge-in`, or `say`. |
+| View | URL | `start-turn` / `end-turn` | `barge-in` | `say` | Notes |
+|---|---|---|---|---|---|
+| Landing | `/` | **Gated mode only** | **No** | **No** | Default fullscreen avatar. `wireInteractiveControls` binds pointer handlers only when `activeMode === "gated"`; in other modes the mic streams continuously. No `stopButton`, `repeatButton`, or `safeQuestionButtons`. |
+| Operator | `/?view=operator` | **Gated mode only** | **Yes** | **Yes** | Full control console with transcripts, safe questions, barge-in, tool activity. All interactive buttons are present. |
+| Display | `/?view=display` | **No** | **No** | **No** | `prepareMicrophone` and `wireInteractiveControls` return immediately for non-interactive views. Opens a WebSocket and receives `ready`; initiates WebRTC negotiation for avatar video; cannot send any turn frame. |
 
 ## Validation
 
