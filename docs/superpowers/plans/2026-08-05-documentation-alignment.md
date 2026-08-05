@@ -580,6 +580,12 @@ Added a new bullet: a `?view=display` screen that disconnects stays dead until a
 
 - [x] **Fix HIGH — "confirm audio in display tab" is unsatisfiable (`docs/rehearsal-checklist.md:32`):** The display tab opens its own independent `/ws/session` that receives no microphone input and has no operator controls; its avatar sits idle and silent forever. Video arrives; speech never does. Changed the confirm step to ask only for what is actually observable: avatar video present, connection status healthy, and avatar **idle and silent** as the expected correct state. Added explicit statement that room audio must come from the operator machine. Connected the per-tab-session notes to this consequence in the "Known limitations" section (`docs/rehearsal-checklist.md`), `docs/runbook.md:108`, and `web/README.md:61`.
 
+**Post-review documentation defects (pre-existing on main, fixed in this round):**
+
+- [x] **Fix HIGH — rehearsal checklist opens three tabs against a cap of two (`docs/rehearsal-checklist.md`):** The Event-day setup sequence instructed opening `/` (landing), `/?view=operator`, and `/?view=display`. Every view starts a session via `boot()` → `client.start()`; `SessionGate.TryEnter()` is a non-blocking `Wait(0)` that rejects a third session immediately. With the default `MaxConcurrentSessions: 2` (set in `appsettings.json` and defaulted in `VoiceLiveOptions.cs`), the third tab shows the fatal startup error frame. Fixed by: (1) replacing the landing-tab open step with a direct `/?view=operator` step plus an inline warning to close `/` if accidentally opened; (2) adding a note on the display-tab step that two slots are now consumed and no third tab may be opened; (3) adding a Known Limitations bullet stating the default cap of 2, that a third tab is rejected immediately, and that `MaxConcurrentSessions` is tunable. Also added the same cap note to `docs/runbook.md` §6 where it listed all three views without mentioning the limit.
+
+- [x] **Fix MEDIUM — unescaped pipe in GFM table drops Operator action column (`docs/runbook.md:155`):** `` `DOTNETCORE|10.0` `` inside a table cell split the row into 4 cells in a 3-column table, causing GFM parsers to discard the remedy column entirely. Escaped as `DOTNETCORE\|10.0`. Inline occurrence at `runbook.md:47` is outside a table and left unchanged. Swept all maintained markdown tables for consistent cell counts — no further defects found.
+
 ---
 
 ## Task 7: D-03 — remove the three unimplemented `agent.json` keys

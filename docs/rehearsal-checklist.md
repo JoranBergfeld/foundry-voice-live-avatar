@@ -22,9 +22,10 @@
   dotnet run --project web/src/VoiceLive.Web
   ```
 - [ ] Check health: `curl -s http://localhost:5280/api/health`.
-- [ ] Open the default landing view: `http://localhost:5280/` or `<deployed-url>/`. Use the ⚙ gear to reach the operator view.
 - [ ] Open operator view: `http://localhost:5280/?view=operator` or `<deployed-url>/?view=operator`.
+  > **Session cap:** the server allows **2 concurrent sessions** by default (`MaxConcurrentSessions` in `appsettings.json`). Every open tab that loads a view consumes one slot. Do **not** leave the landing page (`/`) open — open `/?view=operator` directly. If you accidentally opened `/` first, close that tab before continuing.
 - [ ] Open display view if needed: `http://localhost:5280/?view=display` or `<deployed-url>/?view=display`.
+  > With the operator tab already open (1 session), the display tab is the second and last slot. Do **not** open a third tab. To raise the cap for multi-display setups, increase `MaxConcurrentSessions` in `appsettings.json` (or the equivalent App Service application setting) before deploying.
 - [ ] Sign in with the configured operator credentials.
 - [ ] Grant microphone permission in the operator browser.
 - [ ] **Sign in on the display tab as well.** If the display tab is in the same browser profile as the operator tab, the session cookie is already shared — sign in on the operator tab first, then navigate the display tab explicitly to `/?view=display` (signing in always returns you to `/`, and the redirect to `/login` discards the `?view=display` query). If the display screen is a separate machine or browser profile (the normal venue setup), navigate to `/?view=display` on that machine, sign in with the configured operator credentials, then navigate to `/?view=display` again (sign-in always redirects back to `/`).
@@ -46,6 +47,7 @@
 ## Known limitations to brief stakeholders
 
 - [ ] Each browser tab opens its own `/ws/session`; the display tab therefore runs an independent session whose avatar does **not** mirror the operator's conversation and produces **no** audio. Room audio must come from the operator machine. Shared operator+display rooms are future work.
+- [ ] The server allows **2 concurrent sessions** by default (`MaxConcurrentSessions` in `appsettings.json`). A third simultaneous tab is rejected immediately with a startup error. To support more displays, raise `MaxConcurrentSessions` before deploying.
 - [ ] Agent mode is opt-in and requires a Voice Live agent created in the Azure AI Foundry portal.
 - [ ] Browsers require a user gesture before video/audio autoplay; the operator should sign in, grant mic permission, then press a control before showtime.
 - [ ] A `?view=display` screen that disconnects (e.g., from blocked autoplay or a network drop) stays in the disconnected state until a human clicks the **Reconnect** button. For an unattended display, ensure a human is present to respond if a disconnection occurs.

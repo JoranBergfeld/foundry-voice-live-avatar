@@ -89,11 +89,12 @@ Run the web app locally from the repository root:
 dotnet run --project web/src/VoiceLive.Web
 ```
 
-Open:
+Open one or two views — do **not** open all three simultaneously; the default session cap is **2 concurrent sessions** (`MaxConcurrentSessions`):
 
-- Landing view (default): `http://localhost:5280/`
 - Operator/troubleshoot view: `http://localhost:5280/?view=operator`
 - Display view (passive): `http://localhost:5280/?view=display`
+
+(Landing `/` also starts a session; if you open it, close it before opening a second view.)
 
 Sign in with the development credentials `operator` / `rehearsal`, grant microphone permission, then hold **Hold to talk** or click a safe question.
 
@@ -152,4 +153,4 @@ Failures are explicit and visible, not masked:
 | Avatar never appears; log shows `avatar_service_resource_exhausted` | The Voice Live resource has little or no avatar rendering quota (common on a freshly provisioned resource) | Request an avatar rendering quota increase for the resource via Azure support, or set `VoiceLive__Endpoint` to an avatar-enabled resource. **Note:** avatar audio is also lost when the avatar is unavailable (both ride the same WebRTC peer connection), so there is no voice-only fallback — invoke your fallback plan. |
 | Model mode unavailable or realtime model not found | Resource in a region without native realtime model support | Use `swedencentral`; West Europe is not sufficient for native `gpt-realtime`. |
 | Agent mode unavailable | The configured Voice Live agent does not exist in the configured Foundry project | Use model mode, or create the Voice Live agent in the Azure AI Foundry portal and redeploy with `VOICELIVE_MODE=agent`. |
-| App Service deployment fails because `.NET 10` is unavailable | `DOTNETCORE|10.0` is not available in the selected region | Run `azd env set LINUX_FX_VERSION ""` and redeploy self-contained. |
+| App Service deployment fails because `.NET 10` is unavailable | `DOTNETCORE\|10.0` is not available in the selected region | Run `azd env set LINUX_FX_VERSION ""` and redeploy self-contained. |
