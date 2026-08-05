@@ -318,6 +318,8 @@ See [docs/config-schema.md](docs/config-schema.md) for the full schema and all f
 | `avatar-error` | Non-fatal; avatar unavailable; avatar video **and audio** are lost (both ride the same WebRTC peer connection) — WebSocket, microphone capture, and transcripts survive but there is no audible output to the room |
 | `error` | Fatal session error |
 
+Payload shapes, the `ClientConfig` contents of `ready`, and which errors are fatal are documented in [`docs/wire-protocol.md`](docs/wire-protocol.md), which is authoritative if this summary and that reference ever disagree.
+
 Inbound browser frames are capped at 1 MiB. Outbound sends are serialized. Active session count, error count, and session duration are tracked as OpenTelemetry metrics. Errors from Voice Live are sanitized before forwarding. The bridge cleans up the Voice Live session and releases the concurrency gate on exit.
 
 ### Browser client and views

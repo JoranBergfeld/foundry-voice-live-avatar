@@ -13,14 +13,9 @@ The web app has four responsibilities:
 
 The Voice Live credential never leaves the server. Avatar media still flows browser <-> Azure over WebRTC; the server relays the SDP offer/answer and ICE server metadata described in the phase wire protocol.
 
-## Endpoints
+## Endpoints and frame vocabulary
 
-- `GET /api/health` is the anonymous health check. It returns 200 when config is valid and 503 when config failed to load.
-- `GET /login` shows the sign-in form.
-- `POST /login` signs in with configured credentials.
-- `POST /logout` signs out.
-- `GET /api/config` requires authentication and returns sanitized config: region, API version, model, voice, avatar settings, active turn-taking mode, agent metadata, and safe questions.
-- `WS /ws/session` requires authentication and starts a server-side Voice Live session. Browser binary frames are PCM16 audio; browser JSON controls include `avatar-offer`, `start-turn`, `end-turn`, `barge-in`, `say`, and `ping`. Server JSON events include `ready`, transcripts, speech/avatar state, `avatar-answer`, `response-done`, `avatar-error` (non-fatal; avatar unavailable — avatar video **and audio** are lost, WebSocket and transcripts survive but there is no audible output), and `error`.
+The endpoint list and the full `/ws/session` frame vocabulary — including payload shapes, the `ClientConfig` contents of `ready`, per-view restrictions, and which errors are fatal — are documented once, in [`docs/wire-protocol.md`](../docs/wire-protocol.md).
 
 ## Run locally
 

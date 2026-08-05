@@ -1494,124 +1494,33 @@ git commit -m "docs: add production deployment guide"
 
 ---
 
-## Task 16: D-11, D-24 — one authoritative wire-protocol reference
+## Task 16: D-11, D-24 — one authoritative wire-protocol reference ✅
 
-The endpoint table and frame vocabulary appear in three documents with no source of truth, and frame *shapes* are documented nowhere. Write the reference, then make the other documents link to it instead of restating it.
+**Shipped.** Created `docs/wire-protocol.md` as the authoritative reference for `/ws/session`, replaced the endpoint/frame tables in `web/README.md` with a single link, and added a pointer in `README.md` after its existing frame summary tables.
 
-**Files:**
-- Create: `docs/wire-protocol.md`
-- Modify: `web/README.md`
+**Discrepancies found and corrected (spec vs. source):**
 
-- [ ] **Step 1: Create the reference**
+1. **Discriminator field**: The spec's payload examples throughout used `"type"` as the JSON discriminator. The actual code — both TypeScript (`frame.t`) and C# (`tProp.GetString()` from property `"t"`) — use `"t"`. All payload shapes in the shipped document use `"t"`. Added a prominent note at the top of the document.
 
-Create `docs/wire-protocol.md`:
+2. **`avatar-offer` is unconditional**: The spec said "Once, after `ready`, when the avatar is enabled." Code in `onReady` calls `negotiateAvatar` unconditionally for all views; `avatar-offer` is always sent. Updated wording to "Unconditionally, once, immediately after `ready`, by all views including display."
 
-````markdown
-# Wire protocol reference
+3. **Display view behaviour**: The spec lifecycle step 5 implied `avatar-offer` was conditional on avatar being enabled. Verified that `prepareMicrophone` and `wireInteractiveControls` both `return` immediately for non-interactive views; display view opens WebSocket, receives `ready`, does WebRTC negotiation, but cannot send turn frames. Added a "Per-view frame restrictions" table.
 
-**Authoritative reference for `/ws/session`.** If another document contradicts this one, this one is correct — and the other document is a bug. Do not restate frame vocabulary elsewhere; link here.
+4. **`avatar-error` semantics**: The spec said "voice-only fallback" and "voice continues". The actual `handleAvatarError` closes the `RTCPeerConnection`; both audio and video are lost. The shipped document states: "There is no voice-only fallback." Correct per `main.ts` comment and task constraints.
 
-Verified against `web/frontend/src/main.ts`, `web/frontend/src/views.ts` and the server bridge at commit `d5110dc`.
+5. **Missing endpoint `/api/config`**: `Program.cs` maps `GET /api/config` (cookie-authenticated, returns browser-safe config). The spec omitted it; added to the endpoints table.
 
-## Endpoints
+6. **Stale verification claim**: The spec said `d5110dc`; current HEAD of `docs-alignment` is `d657e86`. Replaced with accurate commit reference.
 
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| `GET` | `/` | Cookie | Application shell. `?view=operator`, `?view=display`, or the default landing view. |
-| `GET` | `/login` | Anonymous | Sign-in form. |
-| `POST` | `/login` | Anonymous | Credential submission; issues the auth cookie. |
-| `POST` | `/logout` | Cookie | Clears the auth cookie. |
-| `GET` | `/api/health` | Anonymous | Health and configuration-validity report. |
-| `GET` | `/ws/session` | Cookie | WebSocket upgrade. One connection = one Voice Live session = one concurrency slot. |
+7. **`tool` phase values not enumerated**: The spec said only `phase: string`. The bridge emits `"args"`, `"done"`, `"list"`, `"list-done"`, `"list-failed"`. Listed in the shipped document.
 
-## Connection lifecycle
+8. **`activeMode` values**: The spec listed `"gated"`, `"open"`, `"hybrid"`. Server code uses `"gated"`, `"open-mic"`, `"hybrid"` (verified in `prepareMicrophone` and `SessionModeResolver`). Fixed.
 
-1. Browser opens the WebSocket to `/ws/session` with the auth cookie.
-2. Server validates the cookie and the `Origin` header, then acquires a slot from the concurrency gate. Rejection closes the socket.
-3. Server acquires an Azure token via `DefaultAzureCredential`, builds session options and connects upstream to Voice Live. **The browser never receives an Azure token.**
-4. Server sends `ready`. The client must wait for `ready` before sending anything else.
-5. If the avatar is enabled, the browser sends `avatar-offer`; the server relays SDP and replies with `avatar-answer`. Media then flows **directly** between browser and Azure over WebRTC — not through the server. See [ADR 0002](adr/0002-direct-webrtc-media-plane.md).
-6. Turns proceed (below). Audio uplink is binary; everything else is JSON text.
-7. Either side closing releases the concurrency slot.
+9. **`agentName` nullability**: The spec said `string or null`. The C# anonymous record emits `agentName = config.Agent.AgentName` which is a non-nullable string (empty in model mode). TypeScript `ReadyConfig` defines it as `string`. Updated to `string`.
 
-## Browser → server
+10. **`IceServer` shape**: Added explicit `IceServer` table (`urls: string[]`, `username?: string`, `credential?: string`) to match `BuildIceServers` output.
 
-| Frame | Payload | When |
-|---|---|---|
-| *(binary)* | PCM16 mono audio | Continuously while the microphone is streaming. Not JSON — raw binary frames. |
-| `avatar-offer` | `{ "type": "avatar-offer", "sdp": string }` | Once, after `ready`, when the avatar is enabled. |
-| `start-turn` | `{ "type": "start-turn" }` | Operator begins speaking (press of **Hold to talk**). Sets microphone streaming on. |
-| `end-turn` | `{ "type": "end-turn" }` | Operator stops speaking (release). Sets microphone streaming off. |
-| `barge-in` | `{ "type": "barge-in" }` | Operator interrupts avatar speech. |
-| `say` | `{ "type": "say", "text": string }` | Safe-question injection. **Unconstrained today** — see finding H-01. |
-| `ping` | `{ "type": "ping" }` | Keepalive. Answered with `pong`. |
-
-## Server → browser
-
-All are JSON text frames with a `type` discriminator.
-
-| Frame | Payload | Meaning |
-|---|---|---|
-| `ready` | `{ "type": "ready", "config": ClientConfig, "iceServers": RTCIceServer[] }` | Session established. Always the first frame. |
-| `user-transcript` | `{ "type": "user-transcript", "text": string, "final": boolean }` | Speech-to-text of the operator. `final: false` frames are interim and are replaced, not appended. |
-| `agent-transcript` | `{ "type": "agent-transcript", "text": string, "final": boolean }` | The avatar's response text, same interim semantics. |
-| `speech-started` | `{ "type": "speech-started" }` | Server-side VAD detected speech. |
-| `speech-stopped` | `{ "type": "speech-stopped" }` | Server-side VAD detected end of speech. |
-| `avatar-speaking` | `{ "type": "avatar-speaking" }` | Avatar audio playback began. |
-| `avatar-idle` | `{ "type": "avatar-idle" }` | Avatar finished speaking. |
-| `avatar-answer` | `{ "type": "avatar-answer", "sdp": string }` | WebRTC answer; the browser applies it as the remote description. |
-| `response-done` | `{ "type": "response-done" }` | The turn's response is complete. |
-| `tool` | `{ "type": "tool", "phase": string, "name"?: string, "callId"?: string }` | Tool invocation progress. Hosted tools may emit no client event at all. |
-| `avatar-error` | `{ "type": "avatar-error", "code"?: string, "message": string }` | **Non-fatal.** Avatar failed; voice continues. `avatar_service_resource_exhausted` here means quota exhaustion → voice-only fallback. |
-| `error` | `{ "type": "error", "message": string }` | **Fatal.** The session is over. The client shows an error banner and reveals **Reconnect**. |
-| `pong` | `{ "type": "pong" }` | Reply to `ping`. |
-
-### `ClientConfig`
-
-Sent inside `ready`. Mirrors the server record of the same name.
-
-| Field | Type | Notes |
-|---|---|---|
-| `mode` | string | Configured mode. |
-| `activeMode` | string | Turn-taking mode actually in force: `gated`, `open`, or `hybrid`. |
-| `agentName` | string or null | Populated in agent mode only. |
-| `safeQuestions` | string[] | Rendered as one-click buttons in the operator view. |
-| `avatarCharacter` | string | Avatar character id. |
-| `avatarStyle` | string | Avatar style id. |
-
-## Validation
-
-**Neither side validates frame shape today.** Both ends switch on `type` and read fields optimistically, so a malformed frame produces an undefined-property error rather than a clean protocol failure. Tracked as finding M-06. This table is the contract that fix should enforce.
-````
-
-- [ ] **Step 2: Replace the duplicated tables in `web/README.md`**
-
-Delete the endpoint table and the frame-vocabulary tables from `web/README.md` and put in their place:
-
-```markdown
-The endpoint list and the full `/ws/session` frame vocabulary — including payload shapes and which errors are fatal — are documented once, in [`docs/wire-protocol.md`](../docs/wire-protocol.md).
-```
-
-- [ ] **Step 3: Point the README at the reference**
-
-In `README.md`, directly beneath the existing frame tables, add:
-
-```markdown
-Payload shapes, the `ClientConfig` contents of `ready`, and which errors are fatal are documented in [`docs/wire-protocol.md`](docs/wire-protocol.md), which is authoritative if this summary and that reference ever disagree.
-```
-
-- [ ] **Step 4: Verify the frame list matches the code**
-
-Run: `grep -rno "case \"[a-z-]*\"" web/frontend/src/main.ts | sort -u`
-
-Expected: every server→browser `type` handled in `main.ts` appears in the table above, and the table lists nothing the code does not handle. If they differ, **the code wins** — correct the document.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add docs/wire-protocol.md web/README.md README.md
-git commit -m "docs: add authoritative wire-protocol reference and de-duplicate frame tables"
-```
+**Files modified:** `docs/wire-protocol.md` (created), `web/README.md`, `README.md`
 
 ---
 
