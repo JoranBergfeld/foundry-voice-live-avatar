@@ -165,21 +165,22 @@ public sealed class DocumentationTests
         // `azure-custom` passes WebConfig startup validation but SessionOptionsBuilder always
         // throws on it (no custom-voice endpoint id configured). It must not be documented as
         // an allowed value in any format — bullet list, table row, inline list, or prose.
-        // The ONLY permitted mention is on a line that also contains the text "Known trap"
-        // (see Task 8 for the exact approved line). Any other occurrence means the doc is
-        // incorrectly advertising a value that fails every session at connect time.
+        // The ONE permitted mention is on a line whose trimmed text starts with exactly
+        // "- **Known trap:**" (the approved Task 8 warning line). That shape is narrow enough
+        // that it cannot be confused with an allowed-values table cell or bullet, and appending
+        // the marker to an existing line does not satisfy it.
         var schemaLines = schema.Split('\n');
         var badLines = schemaLines
             .Select((line, i) => (line, i))
             .Where(x => x.line.Contains("`azure-custom`", StringComparison.Ordinal)
-                        && !x.line.Contains("Known trap", StringComparison.Ordinal))
+                        && !x.line.TrimStart().StartsWith("- **Known trap:**", StringComparison.Ordinal))
             .Select(x => $"line {x.i + 1}: {x.line.Trim()}")
             .ToList();
 
         Assert.True(badLines.Count == 0,
             "`azure-custom` is accepted by startup validation but always throws in SessionOptionsBuilder " +
             "(no custom-voice endpoint id configured), so it must not be documented as an allowed voice.type. " +
-            "The only permitted mention is on a line explicitly marked 'Known trap'. " +
+            "Remove it from every allowed-values list (table cells, bullets, inline enumerations). " +
             "Offending lines:\n  " + string.Join("\n  ", badLines) +
             "\nSee review-merged.md H-03 / D-04.");
     }

@@ -349,21 +349,22 @@ Append inside the `DocumentationTests` class:
         // `azure-custom` passes WebConfig startup validation but SessionOptionsBuilder always
         // throws on it (no custom-voice endpoint id configured). It must not be documented as
         // an allowed value in any format — bullet list, table row, inline list, or prose.
-        // The ONLY permitted mention is on a line that also contains the text "Known trap"
-        // (see Task 8 for the exact approved line). Any other occurrence means the doc is
-        // incorrectly advertising a value that fails every session at connect time.
+        // The ONE permitted mention is on a line whose trimmed text starts with exactly
+        // "- **Known trap:**" (the approved Task 8 warning line). That shape is narrow enough
+        // that it cannot be confused with an allowed-values table cell or bullet, and appending
+        // the marker to an existing line does not satisfy it.
         var schemaLines = schema.Split('\n');
         var badLines = schemaLines
             .Select((line, i) => (line, i))
             .Where(x => x.line.Contains("`azure-custom`", StringComparison.Ordinal)
-                        && !x.line.Contains("Known trap", StringComparison.Ordinal))
+                        && !x.line.TrimStart().StartsWith("- **Known trap:**", StringComparison.Ordinal))
             .Select(x => $"line {x.i + 1}: {x.line.Trim()}")
             .ToList();
 
         Assert.True(badLines.Count == 0,
             "`azure-custom` is accepted by startup validation but always throws in SessionOptionsBuilder " +
             "(no custom-voice endpoint id configured), so it must not be documented as an allowed voice.type. " +
-            "The only permitted mention is on a line explicitly marked 'Known trap'. " +
+            "Remove it from every allowed-values list (table cells, bullets, inline enumerations). " +
             "Offending lines:\n  " + string.Join("\n  ", badLines) +
             "\nSee review-merged.md H-03 / D-04.");
     }
@@ -665,7 +666,7 @@ with:
 
 Run: `dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true --filter "FullyQualifiedName~Config_schema_documents_only_voice_types"`
 
-Expected: **PASS.** The test checks that `` `azure-custom` `` does not appear on any line unless that line also contains the text `Known trap`. The `Known trap` bullet added in Step 2 above satisfies that rule exactly. Any other occurrence — in a field table row, a bullet list, a comma-separated inline list, or plain prose — will trip the test. If you reword the warning, keep `Known trap` in the same line or the test will fail.
+Expected: **PASS.** The test checks that `` `azure-custom` `` does not appear on any line unless the trimmed line starts with exactly `- **Known trap:**`. The warning bullet added in Step 2 above satisfies that rule exactly. Any other occurrence — in a field table row, a bullet list, a comma-separated inline list, or plain prose — will trip the test. If you reword the warning, ensure the line still starts with `- **Known trap:**` or the test will fail.
 
 - [ ] **Step 4: Commit**
 
