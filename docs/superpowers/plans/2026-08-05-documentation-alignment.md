@@ -659,6 +659,17 @@ git add config/agent.json docs/config-schema.md
 git commit -m "docs: remove agent.json keys that no code reads"
 ```
 
+### Code-review corrections applied (2026-08-05)
+
+**Finding 1 (HIGH) — stale prose references to deleted keys:**
+- Removed "resume policy, grounding strategy" from `docs/runbook.md:76`.
+- Removed "grounding strategy, resume policy" from `README.md:180`.
+- Updated the plan's final-sweep grep pattern to also cover space-separated prose forms (`grounding strategy\|resume policy`) so this class of miss cannot recur.
+
+**Finding 2 (MEDIUM) — "keys are ignored" claim was false for two files:**
+- Rewrote `docs/config-schema.md` line 104 to document the asymmetric strictness: `agent.json` and `session.json` silently ignore unknown properties; `turntaking.json` validates every key under `modes` (empirically confirmed error: `turntaking.json: modes.experimental.turnDetection: is required when manualTurn is false`); `avatar.json.customized` is rejected outright. Scoped the note to exclude `appsettings.json`/environment variables.
+- Corrected `docs/config-schema.md` line 107: `avatar.json.customized` is **rejected at startup** (not ignored), even when `customized: false`.
+
 ---
 
 ## Task 8: D-04 — stop documenting `azure-custom` as supported
@@ -2304,7 +2315,7 @@ Expected: all pre-existing tests still pass.
 - [ ] **No false claim survives**
 
 ```bash
-grep -rn "automatic reconnect\|reconnect with backoff\|strict \`Content-Security-Policy\`\|azure-custom\|groundingStrategy\|conversationResumePolicy\|/home/" \
+grep -rn "automatic reconnect\|reconnect with backoff\|strict \`Content-Security-Policy\`\|azure-custom\|groundingStrategy\|conversationResumePolicy\|grounding strategy\|resume policy\|/home/" \
   README.md web/README.md docs/*.md docs/adr/*.md CONTRIBUTING.md SECURITY.md
 ```
 

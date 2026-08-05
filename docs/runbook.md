@@ -73,7 +73,7 @@ Before rehearsal, verify the operator-owned values in `/config` and app settings
 
 - App settings: `VoiceLive:Endpoint` (`VoiceLive__Endpoint`), `VoiceLive:ApiVersion` (`VoiceLive__ApiVersion`), and `VoiceLive:Mode` (`VoiceLive__Mode` or `VOICELIVE_MODE`).
 - `config/session.json`: region, model (`gpt-realtime` for model mode), voice, and input audio settings. `session.model` is required only in model mode.
-- `config/agent.json`: `agentName`, `agentProjectName`, resume policy, grounding strategy, and safe questions.
+- `config/agent.json`: `agentName`, `agentProjectName`, and safe questions.
 - `config/avatar.json`: avatar character/style.
 - `config/grounding/company-direction.md`: event-ready grounding content.
 

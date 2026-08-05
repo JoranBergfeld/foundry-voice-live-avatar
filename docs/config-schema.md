@@ -101,9 +101,13 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 - `turntaking.json.activeMode` must be one of `open-mic`, `gated`, or `hybrid`, and the matching entry must exist in `modes`.
 - `agent.json.agentName` and `agent.json.agentProjectName` are required in agent mode.
 - Unknown values for `voice.type` or `turntaking.activeMode` fail fast at startup.
-- Keys not listed in this document are **ignored**, not rejected. Adding an undocumented key to a config file changes nothing and produces no warning.
+- Unknown JSON properties are handled **asymmetrically** by the four config files — do not assume they are universally ignored:
+  - **`agent.json` and `session.json`** — unrecognised properties are silently ignored by the JSON deserialiser.
+  - **`turntaking.json`** — every key under `modes` is deserialised and validated, not just the three documented ones. Adding an undocumented mode entry (e.g. `"modes": { "experimental": {} }`) produces the error `turntaking.json: modes.experimental.turnDetection: is required when manualTurn is false` and **startup fails**.
+  - **`avatar.json`** — the property `customized` is explicitly rejected (see below), regardless of its value.
+  - This section covers only these four JSON config files. `appsettings.json` and environment variables go through the ASP.NET configuration system and are subject to different rules.
 - `avatar.json.preview` is a local preview-avatar flag (required, boolean); preview avatars omit style and this field is not sent to Voice Live; missing, `null`, or non-boolean values are invalid.
 - `avatar.json.style` is required when `preview` is `false` and must not be present when `preview` is `true`; the presence of any `style` property alongside `preview: true` is rejected.
-- `avatar.json.customized` is not supported; the app always creates non-customized avatars regardless of config.
+- `avatar.json.customized` is **rejected at startup** with the error `avatar.json: customized: is not supported`; even `customized: false` fails. The app always creates non-customized avatars unconditionally in code.
 - `avatar.json.video.background` must be an object if present; null or any non-object value is invalid.
 - `avatar.json.video.background.imageUrl` is required within `video.background`, must be a string (numbers, booleans, arrays, and objects are invalid), and must be an absolute HTTPS URL.

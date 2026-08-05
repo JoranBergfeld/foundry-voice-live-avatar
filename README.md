@@ -177,7 +177,7 @@ Unauthenticated HTML requests redirect to `/login`. Unauthenticated `/api/*` and
 
 ```
 config/
-  agent.json          # agent mode: agent/project name, safe questions, grounding strategy, resume policy
+  agent.json          # agent mode: agent/project name, safe questions
   avatar.json         # avatar character, style, background
   session.json        # model, voice, noise reduction, transcription flags
   session.sample.json # sample session config excluded from publish
