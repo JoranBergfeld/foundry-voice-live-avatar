@@ -74,10 +74,7 @@ az login
 # optional: az account set --subscription <subscription-id>
 export VoiceLive__Endpoint="https://<your-resource>.services.ai.azure.com"  # Foundry account endpoint
 export VoiceLive__Mode=model
-dotnet run --project web/src/VoiceLive.Web
 ```
-
-MSBuild automatically runs `npm ci && npm run build` via the `BuildFrontend` target before the app starts.
 
 Set your own local credentials once — they are stored outside the repository and are never committed:
 
@@ -86,7 +83,13 @@ dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Username" "<your-u
 dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Password" "<your-password>"
 ```
 
-Open **http://localhost:5280/** and sign in with those credentials.
+Then start the app (MSBuild automatically runs `npm ci && npm run build` via the `BuildFrontend` target before the app starts):
+
+```bash
+dotnet run --project web/src/VoiceLive.Web
+```
+
+Open **http://localhost:5280/** and sign in with the credentials you set above.
 
 - Grant microphone access when prompted.
 - Press and hold **Hold to talk** to speak, or switch turn-taking mode in the operator view.

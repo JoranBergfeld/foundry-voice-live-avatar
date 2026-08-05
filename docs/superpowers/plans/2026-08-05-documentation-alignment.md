@@ -779,7 +779,7 @@ Five code-formatted occurrences of the dev password across four documents, plus 
 
 **"Single shared credential" claim verified:** Confirmed against auth code — one username/password pair from `AuthOptions`; `IsConfigured` gates all logins; no per-user accounts or roles.
 
-**Test result:** 95 passed / 2 failed / 97 total. Failures: `Every_docs_image_is_referenced_by_maintained_markdown` (Task 15) and `Maintained_markdown_has_no_broken_relative_links` (forward refs to `docs/adr/0003-shared-cookie-authentication.md`, `CONTRIBUTING.md`, `docs/production-deployment.md` intentionally not removed).
+**Test result:** 95 passed / 2 failed / 97 total. Failures: `Every_docs_image_is_referenced_by_maintained_markdown` (Task 17) and `Maintained_markdown_has_no_broken_relative_links` (forward refs to `docs/adr/0003-shared-cookie-authentication.md`, `CONTRIBUTING.md`, `docs/production-deployment.md` intentionally not removed).
 
 **Files:**
 - Modify: `web/src/VoiceLive.Web/VoiceLive.Web.csproj`
