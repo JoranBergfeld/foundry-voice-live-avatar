@@ -553,6 +553,12 @@ Changed "reload/restart the tab and repeat the setup interaction" to "click Reco
 
 Added a new bullet: a `?view=display` screen that disconnects stays dead until a human clicks Reconnect; ensure a human is present to respond.
 
+**Code-review corrections (post-merge, Task 6 addendum):**
+
+- [x] **Fix HIGH — conflated failure modes (rehearsal-checklist.md:40):** Split the single "avatar/session error" bullet in During-show controls into two separate bullets keyed to visible on-screen discriminators: (a) fatal error banner + Reconnect button visible → click Reconnect, reload only if that fails; (b) non-fatal "Avatar unavailable" notice + no Reconnect button → do NOT reconnect or reload, continue without avatar video. The old wording incorrectly implied the operator should reload on a non-fatal avatar error, which would destroy a working voice session mid-show.
+
+- [x] **Fix MEDIUM — display-tab gesture step missing (rehearsal-checklist.md):** Added a new pre-show step immediately after opening the display view: click anywhere on the display screen once and confirm avatar video and audio arrive in that tab specifically. Scoped the existing operator-tab gesture step explicitly to the operator tab (the two controls referenced — safe-question buttons and hold-to-talk — only exist in the operator view). User activation is per-document; a gesture in the operator tab does not satisfy the display tab's autoplay requirement.
+
 ---
 
 ## Task 7: D-03 — remove the three unimplemented `agent.json` keys

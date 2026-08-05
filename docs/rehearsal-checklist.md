@@ -25,10 +25,11 @@
 - [ ] Open the default landing view: `http://localhost:5280/` or `<deployed-url>/`. Use the ⚙ gear to reach the operator view.
 - [ ] Open operator view: `http://localhost:5280/?view=operator` or `<deployed-url>/?view=operator`.
 - [ ] Open display view if needed: `http://localhost:5280/?view=display` or `<deployed-url>/?view=display`.
+- [ ] **Click anywhere on the display screen once** to satisfy the browser autoplay/user-gesture requirement for that tab. Confirm avatar video and audio arrive **in the display tab**. (User activation is per-document; a gesture in the operator tab does not cover the display tab.)
 - [ ] Sign in with the configured operator credentials.
 - [ ] Grant microphone permission in the operator browser.
-- [ ] Click a safe question or use hold-to-talk once to satisfy browser autoplay/user-gesture requirements.
-- [ ] Confirm avatar video and audio arrive.
+- [ ] In the **operator tab**: click a safe question or use hold-to-talk once to satisfy browser autoplay/user-gesture requirements for that tab.
+- [ ] Confirm avatar video and audio arrive in the operator tab.
 - [ ] Confirm one safe question completes end-to-end with streaming transcript and final response.
 
 ## During-show controls
@@ -37,7 +38,8 @@
 - [ ] Use safe-question buttons to steer back to approved topics.
 - [ ] Use repeat to replay the last completed answer when needed.
 - [ ] Use barge-in/interrupt controls if the avatar needs to stop speaking.
-- [ ] If an avatar/session error appears, the session has closed; click **Reconnect** to restore it (this preserves sign-in, mic permission, and autoplay gesture). Reload/restart the tab only if Reconnect fails.
+- [ ] If a **fatal error banner** appears and a **Reconnect** button is visible, the session has closed; click **Reconnect** to restore it (this preserves sign-in, mic permission, and autoplay gesture). Reload/restart the tab only if Reconnect fails.
+- [ ] If an **"Avatar unavailable"** notice appears but **no Reconnect button is present**, the avatar connection failed non-fatally — the voice session is still active. Do NOT click Reconnect and do NOT reload the tab; reloading destroys the working voice session and may re-trigger the same quota error on reconnect. Continue the show without avatar video.
 
 ## Known limitations to brief stakeholders
 
