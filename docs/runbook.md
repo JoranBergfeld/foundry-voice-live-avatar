@@ -111,7 +111,11 @@ Known MVP limitation: each browser tab opens its own `/ws/session`, which create
 
 ## 7. Avatar operation
 
-Media flows browser ↔ Azure over WebRTC; the server relays SDP and ICE. To confirm the avatar path end to end, run the Playwright suite (`npm --prefix web/frontend test`) and watch the WebRTC status indicator reach **connected** in the operator view, with video and audio tracks arriving and a safe question producing streaming transcripts followed by a completed response.
+Media flows browser ↔ Azure over WebRTC; the server relays SDP and ICE.
+
+`npm --prefix web/frontend test` is the automated **frontend regression suite**: it runs headless against a static file server (`python3 -m http.server`) with no backend — WebSocket, RTCPeerConnection, `getUserMedia`, and `AudioContext` are replaced by test mocks. It verifies UI behaviour and lifecycle logic; it does not confirm the Azure avatar path.
+
+The true **end-to-end check is manual**: start the app, open the operator view, watch the WebRTC status indicator reach **connected**, then ask a safe question and confirm video and audio arrive and the transcript completes.
 
 Real browsers require a user gesture before video/audio autoplay, and the avatar stream carries audio. On the event machine the operator must interact with the page **before** the avatar stream arrives: sign in, grant microphone permission, then hold to talk or click a safe question.
 

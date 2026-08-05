@@ -100,10 +100,10 @@ node --version     # 24 or later
 python3 --version  # required by the Playwright suite's static file server
 az account show --query '{sub:name, user:user.name}' -o table
 az role assignment list --assignee "$(az ad signed-in-user show --query id -o tsv)" \
-  --all --query "[].roleDefinitionName" -o tsv
+  --all --include-groups --include-inherited --query "[].roleDefinitionName" -o tsv
 ```
 
-The last command must list **Cognitive Services User** and **Foundry User**. If it does not, session creation will fail at connect time with a `403` even though `/api/health` reports Healthy.
+The last command should list **Cognitive Services User** and **Foundry User**. If it prints nothing, check whether the roles are granted via an Entra group or at a management-group scope (which the default subscription-only search misses), and confirm you are on the subscription that hosts the Foundry account. If the roles are genuinely absent, session creation will fail at connect time with a `403` even though `/api/health` reports Healthy.
 
 **Steps**
 

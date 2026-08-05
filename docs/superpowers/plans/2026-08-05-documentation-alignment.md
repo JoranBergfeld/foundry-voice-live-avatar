@@ -1192,16 +1192,18 @@ Four defects: no document names a test command, `web/README.md` ships a personal
 In `web/README.md`, replace the absolute path with a repo-relative one:
 
 ```bash
-ConfigDir=$(pwd)/config ASPNETCORE_URLS=http://127.0.0.1:5210 dotnet run --project src/VoiceLive.Web
+ConfigDir=$(pwd)/config ASPNETCORE_URLS=http://127.0.0.1:5210 dotnet run --no-launch-profile --project web/src/VoiceLive.Web
 ```
 
 Add immediately below it:
 
 ```markdown
-Run this from the repository root. `$(pwd)/config` makes the path explicit; a relative `./config` also works when the working directory is the repo root.
+Run this from the repository root. `$(pwd)/config` makes the path absolute and explicit. `dotnet run` sets the app's working directory to the **project** directory (`web/src/VoiceLive.Web`), not the invocation directory, so a relative path such as `./config` resolves under the project directory and will not find the config files. Use `$(pwd)/config` (absolute, from the repo root) or `../../../config` (relative to the project directory) instead.
 ```
 
-> **Spec deviation — Step 1 explanatory note:** The spec claimed `ConfigDir` *must* be absolute. Verification shows `appsettings.json` defaults to `"ConfigDir": "config"` (relative) and `Path.Combine` resolves it from the process CWD. A relative path works when running from the repo root. The note was corrected to be accurate.
+> **Regression correction — Step 1:** The commit removed `--no-launch-profile` and changed `web/src/VoiceLive.Web` to `src/VoiceLive.Web`. Both were regressions: without `--no-launch-profile` the launch profile overrides `ASPNETCORE_URLS` and binds port 5280 instead of 5210; `src/VoiceLive.Web` does not resolve from the repo root. The pre-commit command was correct on both points.
+>
+> The explanatory note also contained a false claim. Verification from the reviewer proved that `ConfigDir` is resolved against the app's working directory, which `dotnet run` sets to the **project** directory, not the invocation directory. `ConfigDir=./config` from the repo root therefore fails with `config/session.json: file not found`. The note has been corrected to state the true behaviour.
 
 - [x] **Step 2: Verify the path is gone**
 
@@ -1244,7 +1246,7 @@ Done. Replaced past-tense result with procedure.
 
 `npm --prefix web/frontend run typecheck`: exit 0. ✓
 
-Playwright uses `python3 -m http.server` (confirmed in `playwright.config.ts`). Python 3.12.3 present.
+Playwright uses `python3 -m http.server` (confirmed in `playwright.config.ts`). Python 3.12.3 present. Note: the Playwright suite is a frontend regression suite with mocked transport; it does not verify the Azure avatar path end to end. Runbook §7 updated to reflect this.
 
 - [x] **Step 8: Commit**
 
@@ -1253,13 +1255,13 @@ git add README.md web/README.md docs/runbook.md
 git commit -m "docs: fix getting-started gaps — test commands, prereq checks, portable paths"
 ```
 
+- [x] **Step 4 (follow-up): Explain `session.sample.json` in the config directory listing (D-16)**
+
 In the `README.md` config-directory listing, replace the `session.sample.json` description with:
 
 ```markdown
 - `session.sample.json` — a reference copy of `session.json`, excluded from publish. Copy it over `session.json` to return to known-good settings after experimenting, and diff against it when a config change causes a startup validation failure.
 ```
-
-> Steps 5–8 recorded above in the updated task summary.
 
 ---
 
