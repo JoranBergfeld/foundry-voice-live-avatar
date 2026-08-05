@@ -284,10 +284,10 @@ Reconnection is **operator-initiated**: on disconnect every view reveals a **Rec
 
 ### Azure deployment architecture
 
-- **Foundry account and project** — local authentication disabled; project-level RBAC only.
+- **Foundry account and project** — local authentication disabled; account- and project-level RBAC (no subscription-level role assignments).
 - **App Service** — Linux B1 plan, system-assigned managed identity, WebSockets enabled, always-on, TLS 1.2 minimum, health check path `/api/health`.
 - **Observability** — Log Analytics workspace, Application Insights connected to the workspace.
-- **RBAC** — managed identity assigned `Cognitive Services User` and `Foundry User` on the Foundry project.
+- **RBAC** — managed identity assigned `Cognitive Services User` on the Foundry account and `Foundry User` on the Foundry project.
 - **`azure.yaml`** — `prebuild` hook runs `npm ci && npm run build` in `web/frontend`; `postprovision` hook runs `scripts/setup-agent.sh` to discover existing agents and print agent-mode setup instructions.
 
 ## Repository layout

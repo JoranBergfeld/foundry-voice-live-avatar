@@ -236,15 +236,28 @@ public sealed class DocumentationTests
         Assert.True(bicep.Contains("53ca6127-db72-4b80-b1b0-d745d6d5456d", StringComparison.Ordinal),
             "infra/resources.bicep no longer assigns Foundry User; update the RBAC docs.");
 
+        // Verify scopes: Cognitive Services User must be on the account (raCog scope: ai),
+        // Foundry User must be on the project (raProj scope: project). This prevents README/bicep
+        // drift — RBAC is never inherited child→parent, so wrong scoping causes 403 at connect.
+        Assert.True(
+            System.Text.RegularExpressions.Regex.IsMatch(bicep,
+                @"resource raCog\b[^{]*\{[^}]*scope:\s*ai\b",
+                System.Text.RegularExpressions.RegexOptions.Singleline),
+            "infra/resources.bicep: raCog (Cognitive Services User) must be scoped to 'ai' (the account), not the project.");
+        Assert.True(
+            System.Text.RegularExpressions.Regex.IsMatch(bicep,
+                @"resource raProj\b[^{]*\{[^}]*scope:\s*project\b",
+                System.Text.RegularExpressions.RegexOptions.Singleline),
+            "infra/resources.bicep: raProj (Foundry User) must be scoped to 'project', not the account.");
+
         // 'Azure AI User' is the retired display name of the Foundry User role
         // (53ca6127-db72-4b80-b1b0-d745d6d5456d), not a second role. Listing it as an
         // alternative creates three-document disagreement and confuses new operators.
-        // The ONE permitted mention is on a line whose trimmed text starts with exactly
-        // "- **Former name:**" — the single explanatory note in docs/runbook.md that tells
-        // readers the Azure portal may show the old name. That shape is narrow enough that it
-        // cannot be confused with an allowed-values list or alternative-role framing, and
-        // appending the marker to an offending line does not help because the banned pattern
-        // ("Foundry User` / `Azure AI User" or equivalent) must not appear on that line either.
+        // Allowed on a line whose trimmed text starts with exactly "- **Former name:**" —
+        // the single explanatory note in docs/runbook.md that tells readers the Azure portal
+        // may show the old name. Even on that line, alternative-role framing is banned:
+        // do not use / or "or" as alternatives, and do not write "in addition to",
+        // "as applicable", "second role", "additional role", or "also grant".
         // If you are writing docs/production-deployment.md: list the two roles as
         // "`Cognitive Services User` and `Foundry User`", not "`Foundry User` / `Azure AI User`".
         var stale = MaintainedMarkdown()
@@ -253,18 +266,31 @@ public sealed class DocumentationTests
                 var lines = File.ReadAllLines(Path.Combine(root, rel));
                 return lines
                     .Select((line, i) => (rel, line, i))
-                    .Where(x => x.line.Contains("Azure AI User", StringComparison.Ordinal)
-                                && !(x.line.TrimStart().StartsWith("- **Former name:**", StringComparison.Ordinal)
-                                     && !x.line.Contains("Foundry User", StringComparison.Ordinal)));
+                    .Where(x =>
+                    {
+                        if (!x.line.Contains("Azure AI User", StringComparison.Ordinal)) return false;
+                        if (!x.line.TrimStart().StartsWith("- **Former name:**", StringComparison.Ordinal)) return true;
+                        // Even on the exempt line, alternative-role framing is still banned.
+                        return x.line.Contains(" / `", StringComparison.Ordinal) ||
+                               x.line.Contains("` / ", StringComparison.Ordinal) ||
+                               x.line.Contains("in addition to", StringComparison.OrdinalIgnoreCase) ||
+                               x.line.Contains("as applicable", StringComparison.OrdinalIgnoreCase) ||
+                               x.line.Contains("second role", StringComparison.OrdinalIgnoreCase) ||
+                               x.line.Contains("additional role", StringComparison.OrdinalIgnoreCase) ||
+                               x.line.Contains("also grant", StringComparison.OrdinalIgnoreCase);
+                    });
             })
             .Select(x => $"{x.rel} line {x.i + 1}: {x.line.Trim()}")
             .ToList();
 
         Assert.True(stale.Count == 0,
-            "These lines still list the retired role name 'Azure AI User' as an alternative role. " +
-            "It is the former display name of Foundry User (53ca6127-db72-4b80-b1b0-d745d6d5456d), not a separate role. " +
+            "'Azure AI User' is the retired display name of Foundry User " +
+            "(53ca6127-db72-4b80-b1b0-d745d6d5456d), not a separate role. " +
             "Use '`Cognitive Services User` and `Foundry User`' instead. " +
-            "One explanatory mention is allowed only on a line whose trimmed text starts with '- **Former name:**'.\n  " +
+            "One mention is allowed on a line whose trimmed text starts with exactly " +
+            "'- **Former name:**', but even there alternative-role framing is banned: " +
+            "do not use / or 'or' as alternatives between role names, and do not include " +
+            "'in addition to', 'as applicable', 'second role', 'additional role', or 'also grant'.\n  " +
             string.Join("\n  ", stale));
     }
 

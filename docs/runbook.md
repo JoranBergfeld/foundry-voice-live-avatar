@@ -64,7 +64,7 @@ The browser never receives an Azure token or Voice Live credential. Recommended 
 
 - `Cognitive Services User` (`a97b65f3-24c7-4388-baec-2e87135dc908`)
 - `Foundry User` (`53ca6127-db72-4b80-b1b0-d745d6d5456d`) on the Foundry account/project.
-  - **Former name:** The Azure portal may still show this role under its former display name, *Azure AI User* — it is the same role definition, so assign by GUID if the names are confusing.
+  - **Former name:** `Foundry User` was previously displayed as *Azure AI User* by the Azure portal — it is the same role definition; assign by GUID if the names are confusing.
 
 ## 5. Configuration
 
