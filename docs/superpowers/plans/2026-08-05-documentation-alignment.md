@@ -878,6 +878,8 @@ Append inside the `DocumentationTests` class:
                         // Even on the exempt line, alternative-role framing is still banned.
                         return x.line.Contains(" / `", StringComparison.Ordinal) ||
                                x.line.Contains("` / ", StringComparison.Ordinal) ||
+                               x.line.Contains(" or `", StringComparison.Ordinal) ||
+                               x.line.Contains("` or ", StringComparison.Ordinal) ||
                                x.line.Contains("in addition to", StringComparison.OrdinalIgnoreCase) ||
                                x.line.Contains("as applicable", StringComparison.OrdinalIgnoreCase) ||
                                x.line.Contains("second role", StringComparison.OrdinalIgnoreCase) ||
