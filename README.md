@@ -10,7 +10,32 @@ A stage-ready conversational avatar built on [Microsoft Foundry Voice Live](http
 | `/?view=operator` | Operator console — session controls, transcript, tool events, diagnostics |
 | `/?view=display` | Dedicated display surface for secondary screens |
 
-By default the app runs in **model mode** using `gpt-realtime`. Optional **agent mode** uses a named Voice Live agent created in the Azure AI Foundry portal. Reliability features include manual turn gating (Hold to talk, gated, or open-mic), automatic reconnect, health and error reporting at `/api/health`, safe-question injection, and voice-only fallback when avatar capacity is unavailable.
+By default the app runs in **model mode** using `gpt-realtime`. Optional **agent mode** uses a named Voice Live agent created in the Azure AI Foundry portal. Reliability features include manual turn gating (`gated` — Hold to talk — plus `open-mic` and `hybrid`), an operator-initiated **Reconnect** control on every view, health and error reporting at `/api/health`, and safe-question injection.
+
+## Why this exists
+
+This avatar converses **on stage with a C-level leader**, explaining company direction to a live audience, in a room that may be noisy. That single scenario, not a general chatbot use case, drives every design decision here.
+
+**Reliability and rehearsability beat features.** Anything that can fail mid-show needs a defined behaviour and an operator control. The consequences run through the whole codebase:
+
+| Decision | Because |
+|---|---|
+| Hold-to-talk turn gating is the default | An open microphone in a noisy room triggers on audience noise. The operator decides when the avatar listens. |
+| Safe questions are one click away | If live Q&A stalls, the operator injects a known-good prompt rather than improvising. |
+| Deep noise suppression and server-side VAD | Stage audio is hostile. |
+| Failures are explicit, never masked | A silent retry on stage is indistinguishable from a hang. Every failure surfaces in the operator view with an action. |
+| A dedicated operator view, separate from the display view | The audience must never see diagnostics. |
+| A written rehearsal checklist | The show is rehearsed, so the software must be too. |
+
+## Non-goals
+
+Stating these plainly, because the architecture only makes sense against them:
+
+- **Not multi-tenant and not multi-user.** Authentication is one shared username and password. Everyone who signs in is the same principal, and there is no per-operator identity, audit trail, or authorization model.
+- **Not internet-facing by intent — but `azd up` publishes a public endpoint.** The Bicep template provisions a public App Service with no IP restrictions or VNet integration; the only access control out of the box is the shared username/password. Restricting network access is the operator's responsibility. See [Non-goals](#non-goals) and [Production readiness](#production-readiness) before exposing this to an untrusted network.
+- **Not a persistent assistant.** There is no conversation storage, no cross-session memory, and no user profile.
+- **Not horizontally scalable as configured.** The concurrency cap is a per-instance in-memory gate; scaling out multiplies it rather than sharing it.
+- **One session per browser tab.** Opening the operator and display views simultaneously consumes two of the two available session slots.
 
 ## How it works
 
@@ -67,6 +92,19 @@ flowchart LR
 - Access to a Voice Live / avatar-capable Azure AI Foundry resource
 - `Cognitive Services User` and `Foundry User` roles on the resource
 
+Verify the toolchain and your Azure access before the first run — a missing role assignment is the most common first-run failure:
+
+```bash
+dotnet --version   # 10.0 or later
+node --version     # 24 or later
+python3 --version  # required by the Playwright suite's static file server
+az account show --query '{sub:name, user:user.name}' -o table
+az role assignment list --assignee "$(az ad signed-in-user show --query id -o tsv)" \
+  --all --include-groups --include-inherited --query "[].roleDefinitionName" -o tsv
+```
+
+The last command should list **Cognitive Services User** and **Foundry User**. If it prints nothing, check whether the roles are granted via an Entra group or at a management-group scope (which the default subscription-only search misses), and confirm you are on the subscription that hosts the Foundry account. If the roles are genuinely absent, session creation will fail at connect time with a `403` even though `/api/health` reports Healthy.
+
 **Steps**
 
 ```bash
@@ -74,12 +112,24 @@ az login
 # optional: az account set --subscription <subscription-id>
 export VoiceLive__Endpoint="https://<your-resource>.services.ai.azure.com"  # Foundry account endpoint
 export VoiceLive__Mode=model
-dotnet run --project web/src/VoiceLive.Web
 ```
 
-MSBuild automatically runs `npm ci && npm run build` via the `BuildFrontend` target before the app starts.
+Set your own local credentials once — they are stored outside the repository and are never committed:
 
-Open **http://localhost:5280/** and sign in with the development credentials `operator` / `rehearsal`.
+```bash
+dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Username" "<your-username>"
+dotnet user-secrets --project web/src/VoiceLive.Web set "Auth:Password" "<your-password>"
+```
+
+Then start the app from the repository root (MSBuild automatically runs `npm ci && npm run build` via the `BuildFrontend` target before the app starts):
+
+```bash
+ConfigDir=$(pwd)/config dotnet run --project web/src/VoiceLive.Web
+```
+
+`ConfigDir` must be absolute. `dotnet run` sets the app's working directory to the **project** directory, not the directory you invoked it from, so the default relative `config` resolves to `web/src/VoiceLive.Web/config`, which does not exist — the app starts but `/api/health` reports 503 and no session can begin.
+
+Open **http://localhost:5280/** and sign in with the credentials you set above.
 
 - Grant microphone access when prompted.
 - Press and hold **Hold to talk** to speak, or switch turn-taking mode in the operator view.
@@ -91,9 +141,48 @@ Open **http://localhost:5280/** and sign in with the development credentials `op
 curl -s http://localhost:5280/api/health; echo
 ```
 
-`DefaultAzureCredential` picks up your `az login` token locally and the system-assigned managed identity in Azure. If the token expires, restart the session; the credential refreshes automatically between sessions. If avatar capacity is unavailable the session continues in voice-only mode — the avatar video element is hidden and audio keeps working.
+`DefaultAzureCredential` picks up your `az login` token locally and the system-assigned managed identity in Azure. If the token expires, restart the session; the credential refreshes automatically between sessions. If avatar capacity is unavailable the server sends an `avatar-error` frame — **avatar audio is lost along with the video** (both ride the same WebRTC peer connection), so there is no voice-only fallback at this time. The operator must invoke a fallback plan (see [runbook §9](docs/runbook.md#9-failure-handling)).
+
+## Development
+
+Full setup, prerequisites and conventions are in [CONTRIBUTING.md](CONTRIBUTING.md). The commands you need most:
+
+```bash
+# Backend tests — skip the frontend build for speed, as CI does
+dotnet test web/VoiceLive.Web.sln -p:SkipFrontendBuild=true
+
+# Frontend type check
+npm --prefix web/frontend run typecheck
+
+# Playwright end-to-end tests (requires Python 3 on PATH for the static server)
+npm --prefix web/frontend test
+```
+
+## Production readiness
+
+**Read this before exposing the app to any network you do not control.**
+
+As shipped, this application is built for a **rehearsed, operator-attended, single-event deployment on a trusted network**. Two independent security reviews of commit `d5110dc` ([`review-merged.md`](review-merged.md)) concluded it is not ready for untrusted or internet-facing users. Nothing about the deployment path below enforces that boundary — as noted in [Non-goals](#non-goals), `azd up` produces a public HTTPS endpoint protected by a single shared password.
+
+Close these before an exposed deployment. IDs link to the finding detail in [`review-merged.md`](review-merged.md).
+
+| # | Finding | Required action |
+|---|---|---|
+| 1 | [**C-02**](review-merged.md#c-02--working-credentials-committed-to-the-repository--critical) | The committed credentials (`Auth` block) have been removed and moved to `dotnet user-secrets`; `appsettings.Development.json` now carries non-sensitive logging overrides only. Operator obligation: if the Azure AI Services account named in the former endpoint was ever real and its name is sensitive, re-provision it. |
+| 2 | [**C-01**](review-merged.md#c-01--login-rate-limiter-bypassable-via-spoofed-x-forwarded-for--critical) | Configure `ForwardedHeadersOptions` with known proxies and partition the rate limiter on the validated client IP; today the per-IP limiter is bypassable by a forged header. |
+| 3 | [**H-01**](review-merged.md#h-01--say-control-frame-is-an-unrestricted-prompt-injection-and-cost-channel--high) | Constrain the `say` control frame to a server-side allow-list, with a length cap and per-connection rate limit. Any authenticated client can currently make the avatar speak arbitrary text on stage. |
+| 4 | [**M-01**](review-merged.md#m-01--no-idle-or-absolute-session-timeout-capacity-gate-trivially-exhausted--high) | Add absolute and idle session timeouts. There is no timeout today, and the service bills per session-minute. |
+| 5 | [**M-02**](review-merged.md#m-02--auth__password-stored-as-a-plaintext-app-service-setting--high) | Move `Auth__Password` out of plaintext App Service settings into a Key Vault reference. |
+| 6 | [**H-02**](review-merged.md#h-02--no-csrfantiforgery-protection-on-post-login-and-post-logout--high) | Add antiforgery protection to `POST /login` **and `POST /logout`**. `/logout` is currently anonymous, so a cross-site request can force an operator sign-out mid-show. |
+| 7 | [**H-05**](review-merged.md#h-05--avatar-autoplay-failure-destroys-the-session-in-unattended-views--mediumhigh) | Make blocked autoplay recoverable instead of terminating the session. |
+
+**Also required, and not covered by the code findings above:** decide the identity model (a single shared credential is the whole authentication story today), plan avatar-rendering quota ahead of the event, set up alerting on `/api/health`, and agree a rollback procedure. See [`docs/production-deployment.md`](docs/production-deployment.md).
+
+Actors, assets, entry points and the assumptions this design trusts without verifying are enumerated in [`docs/threat-model.md`](docs/threat-model.md).
 
 ## Deploy to Azure
+
+> **Before running `azd up`**, close the findings in [Production readiness](#production-readiness) — the command produces a public HTTPS endpoint.
 
 ```bash
 az login && azd auth login
@@ -144,6 +233,8 @@ sequenceDiagram
     A-->>B: Forward Voice Live events to browser
 ```
 
+The turn lifecycle, the status channels and what each view can do are documented in [`docs/session-flow.md`](docs/session-flow.md).
+
 ## Architecture
 
 ### Application host and endpoints
@@ -153,7 +244,15 @@ sequenceDiagram
 - **Cookie authentication** — 8-hour sliding session, HttpOnly, SameSite=Lax, Secure outside development.
 - **Login rate limiting** — fixed-window 5 attempts / minute per IP; returns 429.
 - **HSTS and HTTPS redirect** — enabled outside development.
-- **CSP and security headers** — `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, and a strict `Content-Security-Policy` on every response.
+- **Security headers** — `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and a `Content-Security-Policy` on every response:
+
+  ```
+  default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:;
+  connect-src 'self' wss: https:; script-src 'self'; style-src 'self' 'unsafe-inline';
+  worker-src 'self' blob:
+  ```
+
+  Note the current policy is **not** maximally strict: `connect-src` permits any HTTPS/WSS host, `style-src` permits inline styles because `index.html` inlines its CSS, and `frame-ancestors`, `base-uri`, `form-action` and `object-src` are not set. Tracked as finding M-11 in [`review-merged.md`](review-merged.md).
 - **WebSocket middleware** — origin validation against `AllowedOrigins` (same-origin allowed by default), 30-second keepalive, concurrent-session gate.
 - **Config health** — `ConfigHealthCheck` reports unhealthy if config failed to load at startup.
 - **DefaultAzureCredential** — single token credential instance shared across sessions; supports `AZURE_CLIENT_ID` for managed identity client ID.
@@ -166,21 +265,21 @@ sequenceDiagram
 |--------|------|------|----------------|
 | `GET` | `/login` | anonymous | Login form |
 | `POST` | `/login` | anonymous (rate-limited) | Validate credentials, issue cookie |
-| `POST` | `/logout` | authenticated | Clear cookie |
+| `POST` | `/logout` | anonymous | Clear cookie |
 | `GET` | `/api/health` | anonymous | Config health check; 200 healthy / 503 unhealthy |
 | `GET` | `/api/config` | **required** | Return browser-safe config JSON |
 | `WS` | `/ws/session` | **required** | Start server-side Voice Live session; bridge audio and controls |
 
-Unauthenticated HTML requests redirect to `/login`. Unauthenticated `/api/*` and `/ws/*` requests return **401** (no redirect).
+Unauthenticated HTML requests redirect to `/login`. Unauthenticated `/api/*` and `/ws/*` requests return **401** (no redirect). Authoritative endpoint details including `/api/config` field names are in [`docs/wire-protocol.md`](docs/wire-protocol.md).
 
 ### Configuration and session options
 
 ```
 config/
-  agent.json          # agent mode: agent/project name, safe questions, grounding strategy, resume policy
+  agent.json          # agent mode: agent/project name, safe questions
   avatar.json         # avatar character, style, background
   session.json        # model, voice, noise reduction, transcription flags
-  session.sample.json # sample session config excluded from publish
+  session.sample.json # a reference copy of `session.json`, excluded from publish. Copy it over `session.json` to return to known-good settings after experimenting, and diff against it when a config change causes a startup validation failure.
   turntaking.json     # mode (gated/open-mic/hybrid) and thresholds
   grounding/          # grounding documents loaded into session context
 ```
@@ -222,8 +321,10 @@ See [docs/config-schema.md](docs/config-schema.md) for the full schema and all f
 | `avatar-answer` | SDP answer from Voice Live |
 | tool frames | Tool call notifications |
 | `response-done` | Turn complete |
-| `avatar-error` | Non-fatal; avatar unavailable, voice continues |
+| `avatar-error` | Non-fatal; avatar unavailable; avatar video **and audio** are lost (both ride the same WebRTC peer connection) — WebSocket, microphone capture, and transcripts survive but there is no audible output to the room |
 | `error` | Fatal session error |
+
+Payload shapes, the `ReadyConfig` contents of `ready`, and which errors are fatal are documented in [`docs/wire-protocol.md`](docs/wire-protocol.md), which is authoritative if this summary and that reference ever disagree.
 
 Inbound browser frames are capped at 1 MiB. Outbound sends are serialized. Active session count, error count, and session duration are tracked as OpenTelemetry metrics. Errors from Voice Live are sanitized before forwarding. The bridge cleans up the Voice Live session and releases the concurrency gate on exit.
 
@@ -235,15 +336,17 @@ Inbound browser frames are capped at 1 MiB. Outbound sends are serialized. Activ
 - **Audio worklet** — `web/src/VoiceLive.Web/wwwroot/pcm-worklet.js` captures mono microphone input, converts to PCM16, and sends binary frames over the WebSocket.
 - **Turn-taking** — gated mode sends `start-turn`/`end-turn` on button press/release; open-mic mode streams continuously; hybrid uses VAD.
 - **Transcripts and tools** — displayed in the operator view; tool call events from the bridge are shown as structured notifications.
-- **Error and reconnect** — transient errors trigger automatic reconnect with backoff; fatal errors surface in the operator view.
+- **Error and reconnect** — reconnection is **operator-initiated, not automatic**. On disconnect every view reveals a **Reconnect** button; there is no retry timer and no backoff. Fatal errors surface as an error banner; non-fatal avatar errors surface as a separate notice — avatar video **and audio** are lost (both ride the same WebRTC peer connection), and the WebSocket, microphone capture, and transcripts survive but there is no audible output to the room. An unattended `?view=display` screen will therefore stay disconnected until someone clicks Reconnect — staff accordingly.
 - **Resource teardown** — microphone tracks, AudioContext, WebSocket, and RTCPeerConnection are all closed on session end.
 
 ### Authentication and trust boundaries
 
-- **App credentials** (`Auth:Username` / `Auth:Password`) are used only for cookie authentication. Development defaults are `operator` / `rehearsal`.
+- **App credentials** (`Auth:Username` / `Auth:Password`) are used only for cookie authentication. There are **no defaults** — set them via `dotnet user-secrets` locally, and via `Auth__Username` / `Auth__Password` app settings in Azure. A single shared credential is the whole authentication model; see [ADR 0003](docs/adr/0003-shared-cookie-authentication.md) for what that does and does not protect.
 - **Azure credentials** are managed exclusively server-side via `DefaultAzureCredential`: Azure CLI credentials locally, system-assigned managed identity on App Service.
 - The browser **never** receives an Azure token. The `/api/config` endpoint returns only browser-safe fields.
 - **RBAC** — the managed identity is assigned `Cognitive Services User` and `Foundry User`. No API keys are used.
+
+The actors, assets, entry points and the assumptions this design trusts **without verifying** are enumerated in [`docs/threat-model.md`](docs/threat-model.md).
 
 ### Observability and failure behavior
 
@@ -260,17 +363,19 @@ Explicit failure modes:
 | Concurrency gate full | `error` frame "server is at capacity" |
 | Inbound message over 1 MiB | Session closed |
 | Voice Live service error | Sanitized `error` frame; session closed |
-| Avatar capacity unavailable | `avatar-error` frame; voice-only mode continues |
+| Avatar capacity unavailable | `avatar-error` frame; avatar video **and audio** are lost (both ride the same WebRTC peer connection); no voice-only fallback — operator must invoke fallback plan |
 
-Automatic reconnect is attempted by the browser for transient disconnects. Each browser tab opens an independent session with its own concurrency slot. Hosted tool calls may not produce a client-side tool event in all configurations.
+Reconnection is **operator-initiated**: on disconnect every view reveals a **Reconnect** button; there is no automatic retry or backoff. Each browser tab opens an independent session with its own concurrency slot. Hosted tool calls may not produce a client-side tool event in all configurations.
 
 ### Azure deployment architecture
 
-- **Foundry account and project** — local authentication disabled; project-level RBAC only.
+- **Foundry account and project** — local authentication disabled; account- and project-level RBAC (no subscription-level role assignments).
 - **App Service** — Linux B1 plan, system-assigned managed identity, WebSockets enabled, always-on, TLS 1.2 minimum, health check path `/api/health`.
 - **Observability** — Log Analytics workspace, Application Insights connected to the workspace.
-- **RBAC** — managed identity assigned `Cognitive Services User` and `Foundry User` on the Foundry project.
+- **RBAC** — managed identity assigned `Cognitive Services User` on the Foundry account and `Foundry User` on the Foundry project.
 - **`azure.yaml`** — `prebuild` hook runs `npm ci && npm run build` in `web/frontend`; `postprovision` hook runs `scripts/setup-agent.sh` to discover existing agents and print agent-mode setup instructions.
+
+The reasoning behind these choices — including what was rejected and what each decision costs — is recorded in [`docs/adr/`](docs/adr/README.md).
 
 ## Repository layout
 
@@ -291,8 +396,10 @@ README.md
 
 ## Reference documentation
 
+**Start at [docs/README.md](docs/README.md)** — the full documentation index, organised by what you are trying to do. The most-used documents:
+
 - [docs/runbook.md](docs/runbook.md) — deployment, environment variables, operations, troubleshooting
 - [docs/config-schema.md](docs/config-schema.md) — full config file schema and all fields
 - [docs/rehearsal-checklist.md](docs/rehearsal-checklist.md) — pre-show and rehearsal checklist
-- [docs/initial-spec.md](docs/initial-spec.md) — original design specification
+- [docs/history/initial-spec.md](docs/history/initial-spec.md) — original design specification
 - [web/README.md](web/README.md) — backend and frontend architecture detail

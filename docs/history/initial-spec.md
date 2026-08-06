@@ -1,6 +1,9 @@
 # Voice Live Avatar — Project Specification
 
-**Status:** Current architecture after App Service managed-identity consolidation
+> **Status: historical.** This is the original design specification, retained for context. It records intent at the time of writing and is **not** maintained against the current implementation. For behaviour that is warranted accurate, see the [docs/README.md](../README.md) index or the [project README](../../README.md). The use case and design rationale in §1 have been promoted to the [project README](../../README.md#why-this-exists).
+>
+> **Status at time of writing:** Current architecture after App Service managed-identity consolidation
+
 **Owner:** Joran
 **Primary audience of this document:** Coding agent and human reviewers
 **Last updated:** 2026-07-23
@@ -43,6 +46,8 @@ Consequences of that use case, which shape every decision below:
 - `GET /api/config` — authenticated browser-safe config.
 - `WS /ws/session` — authenticated server-side Voice Live bridge.
 
+> **Authoritative reference:** [`docs/wire-protocol.md`](../wire-protocol.md) documents the full endpoint list, frame shapes, and per-view restrictions and is kept accurate against the current implementation. This section is a historical snapshot only.
+
 **Two views:**
 
 | | Display view | Operator view |
@@ -78,7 +83,7 @@ The `config/` directory is shipped with the web app:
   grounding/         # versioned grounding-pack content (markdown)
 ```
 
-`endpoint`, `apiVersion`, and `mode` are app settings under `VoiceLive:*`, not `session.json` fields. See [`docs/config-schema.md`](config-schema.md).
+`endpoint`, `apiVersion`, and `mode` are app settings under `VoiceLive:*`, not `session.json` fields. See [`docs/config-schema.md`](../config-schema.md).
 
 ## 7. Turn-taking policy
 

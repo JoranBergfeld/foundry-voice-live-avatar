@@ -13,24 +13,21 @@ The web app has four responsibilities:
 
 The Voice Live credential never leaves the server. Avatar media still flows browser <-> Azure over WebRTC; the server relays the SDP offer/answer and ICE server metadata described in the phase wire protocol.
 
-## Endpoints
+## Endpoints and frame vocabulary
 
-- `GET /api/health` is the anonymous health check. It returns 200 when config is valid and 503 when config failed to load.
-- `GET /login` shows the sign-in form.
-- `POST /login` signs in with configured credentials.
-- `POST /logout` signs out.
-- `GET /api/config` requires authentication and returns sanitized config: region, API version, model, voice, avatar settings, active turn-taking mode, agent metadata, and safe questions.
-- `WS /ws/session` requires authentication and starts a server-side Voice Live session. Browser binary frames are PCM16 audio; browser JSON controls include `avatar-offer`, `start-turn`, `end-turn`, `barge-in`, `say`, and `ping`. Server JSON events include `ready`, transcripts, speech/avatar state, `avatar-answer`, `response-done`, `avatar-error` (non-fatal; avatar unavailable but voice continues), and `error`.
+The endpoint list and the full `/ws/session` frame vocabulary — including payload shapes, the `ClientConfig` contents of `ready`, per-view restrictions, and which errors are fatal — are documented once, in [`docs/wire-protocol.md`](../docs/wire-protocol.md).
 
 ## Run locally
 
 From the repository root:
 
 ```bash
-dotnet run --project web/src/VoiceLive.Web
+ConfigDir=$(pwd)/config dotnet run --project web/src/VoiceLive.Web
 ```
 
-Open `http://localhost:5280/` for the default fullscreen avatar landing screen, sign in with the development credentials from `appsettings.Development.json` (`operator` / `rehearsal`), grant microphone permission, then hold **Hold to talk**. The ⚙ gear (top-right) opens the operator/troubleshoot console (`?view=operator`) with status lines, transcript, and safe-question buttons.
+`ConfigDir` is required. `dotnet run` sets the app's working directory to the **project** directory (`web/src/VoiceLive.Web`), so the default relative `config` path does not resolve and the app starts unhealthy (`/api/health` returns 503). See the note under [How to verify in a browser](#how-to-verify-in-a-browser).
+
+Open `http://localhost:5280/` for the default fullscreen avatar landing screen, sign in with the credentials you set via `dotnet user-secrets` (see [CONTRIBUTING.md](../CONTRIBUTING.md)), grant microphone permission, then hold **Hold to talk**. The ⚙ gear (top-right) opens the operator/troubleshoot console (`?view=operator`) with status lines, transcript, and safe-question buttons.
 
 For an anonymous health check:
 
@@ -53,16 +50,18 @@ Tool/function/MCP events emitted by the agent are logged and shown under "Tool a
 Run the app from the repository root:
 
 ```bash
-ConfigDir=/home/jbergfeld/vcs/foundry-voice-live-avatar/config ASPNETCORE_URLS=http://127.0.0.1:5210 dotnet run --no-launch-profile --project web/src/VoiceLive.Web
+ConfigDir=$(pwd)/config ASPNETCORE_URLS=http://127.0.0.1:5210 dotnet run --no-launch-profile --project web/src/VoiceLive.Web
 ```
+
+Run this from the repository root. `$(pwd)/config` makes the path absolute and explicit. `dotnet run` sets the app's working directory to the **project** directory (`web/src/VoiceLive.Web`), not the invocation directory, so a relative path such as `./config` resolves under the project directory and will not find the config files. Use `$(pwd)/config` (absolute, from the repo root) or `../../../config` (relative to the project directory) instead.
 
 Open `http://127.0.0.1:5210/` (fullscreen landing) or `http://127.0.0.1:5210/?view=operator` (operator console), sign in, grant microphone permission, then hold **Hold to talk**. Expect avatar video, spoken answer audio, and live/final transcripts. Open `http://127.0.0.1:5210/?view=display` for the passive fullscreen avatar-only view (no microphone).
 
-MVP limitation: every browser tab opens its own `/ws/session`, which creates its own server-side Voice Live session. The operator tab is the complete self-contained experience; a shared operator/display room with one conversation across two screens is future work.
+MVP limitation: every browser tab opens its own `/ws/session`, which creates its own server-side Voice Live session. The display tab therefore runs an independent session whose avatar does **not** mirror the operator's conversation and produces **no** audio — room audio must come from the operator machine. The operator tab is the complete self-contained experience; a shared operator/display room with one conversation across two screens is future work.
 
 ## Security
 
-Operators authenticate with ASP.NET Core cookie auth. Credentials come from `Auth:Username` / `Auth:Password` configuration (`Auth__Username` / `Auth__Password` environment variables or App Service app settings); local development credentials live in `web/src/VoiceLive.Web/appsettings.Development.json`. Unauthenticated HTML requests redirect to `/login`, while unauthenticated `/api/*` and `/ws/*` requests return 401.
+Operators authenticate with ASP.NET Core cookie auth. Credentials come from `Auth:Username` / `Auth:Password` configuration (`Auth__Username` / `Auth__Password` environment variables or App Service app settings); local development credentials come from `dotnet user-secrets` (see [CONTRIBUTING.md](../CONTRIBUTING.md)). `appsettings.Development.json` carries no `Auth` section, and a test enforces that. Unauthenticated HTML requests redirect to `/login`, while unauthenticated `/api/*` and `/ws/*` requests return 401.
 
 The browser never receives the Foundry endpoint or the Voice Live credential. `/ws/session` uses `DefaultAzureCredential` on the server, which becomes the App Service system-assigned managed identity in Azure.
 

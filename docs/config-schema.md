@@ -6,11 +6,11 @@ The `/config` directory contains the web app's JSON config files. All values bel
 
 | Setting | Type | Required | Allowed values / default | Description |
 | --- | --- | --- | --- | --- |
-| `VoiceLive:Endpoint` | string | Required | Default development value points at the Foundry account endpoint | Voice Live account endpoint, e.g. `https://<account>.services.ai.azure.com`. Environment variable: `VoiceLive__Endpoint`. |
+| `VoiceLive:Endpoint` | string | Required | No default — set `VoiceLive__Endpoint` in the environment or via `dotnet user-secrets` | Voice Live account endpoint, e.g. `https://<account>.services.ai.azure.com`. Environment variable: `VoiceLive__Endpoint`. |
 | `VoiceLive:ApiVersion` | string | Required | Default: `2025-10-01` | Voice Live API version. Environment variable: `VoiceLive__ApiVersion`. |
 | `VoiceLive:Mode` | string | Required | `model`, `agent`; default: `model` | Session establishment mode. Environment variable: `VoiceLive__Mode`; `VOICELIVE_MODE` can also override it. |
-| `Auth:Username` | string | Required | Development default: `operator` | App login username. Environment variable: `Auth__Username`. |
-| `Auth:Password` | string | Required | Development default: `rehearsal` | App login password. Environment variable: `Auth__Password`. |
+| `Auth:Username` | string | Required | No default | App login username. Set via `dotnet user-secrets` locally, `Auth__Username` in Azure. |
+| `Auth:Password` | string | Required | No default | App login password. Set via `dotnet user-secrets` locally, `Auth__Password` in Azure. Never commit this value or store it in an App Service setting in production — see [`production-deployment.md`](production-deployment.md). |
 
 `endpoint`, `apiVersion`, and `mode` are no longer in `config/session.json`. `session.model` is required only in **model** mode; in **agent** mode the Voice Live agent owns the model. Agent name and project live in `config/agent.json`.
 
@@ -23,7 +23,7 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 | `region` | string | Required | Default: `swedencentral` | Azure region for the Voice Live resource. |
 | `model` | string | Required in model mode | Default: `gpt-realtime` | Realtime model name. In agent mode the configured agent owns the model. |
 | `voice` | object | Required | Contains `type`, `name` | Voice selection. |
-| `voice.type` | string | Required | `azure-realtime-native`, `azure-standard`, `azure-custom`, `openai`; default: `azure-realtime-native` | Voice provider/type. |
+| `voice.type` | string | Required | `azure-realtime-native`, `azure-standard`, `openai`; default: `azure-realtime-native` | Voice provider/type. |
 | `voice.name` | string | Required | Default: `en-US-AndrewNeural` | Voice name. |
 | `inputAudioNoiseReduction` | object | Required | Contains `type` | Input audio noise reduction settings. |
 | `inputAudioNoiseReduction.type` | string | Required | Default: `azure_deep_noise_suppression` | Noise reduction mode. |
@@ -71,9 +71,6 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 | --- | --- | --- | --- | --- |
 | `agentName` | string | Required for agent mode | Default: `company-direction-avatar` | Voice Live agent name. |
 | `agentProjectName` | string | Required for agent mode | Default: `proj-default` | Foundry agent project name (the short project name in the Foundry endpoint path, e.g. `proj-default`). |
-| `agentVersion` | string or null | Optional | Default: `null` | Optional pinned agent version. |
-| `conversationResumePolicy` | string | Required | `resume`, `fresh`; default: `resume` | Whether conversations resume or start fresh. |
-| `groundingStrategy` | string | Required | `pack`, `rag`, `both`; default: `pack` | Grounding source strategy. |
 | `safeQuestions` | string array | Required | Default: two configured fallback questions | Safe redirect questions the avatar can use. |
 | `safeQuestions[]` | string | Required | Defaults: `Let's refocus - what is our single most important priority this year?`, `What does this direction mean for our customers?` | Individual safe redirect question. |
 
@@ -100,14 +97,18 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 - `VoiceLive:Endpoint` and `VoiceLive:ApiVersion` must be configured.
 - `session.json` must not carry `endpoint`, `apiVersion`, or `mode`; those values come from app settings.
 - `session.json.model` is required in model mode and optional in agent mode.
-- `session.json.voice.type` must be one of `azure-realtime-native`, `azure-standard`, `azure-custom`, or `openai`.
+- `session.json.voice.type` must be one of `azure-realtime-native`, `azure-standard`, or `openai`.
+- **Known trap:** startup validation currently also accepts the value `azure-custom` even though session creation always fails on it, because no custom-voice endpoint id is configured. `/api/health` reports Healthy and every session fails at connect time. Do not use it. Tracked as finding H-03 in [`review-merged.md`](../review-merged.md).
 - `turntaking.json.activeMode` must be one of `open-mic`, `gated`, or `hybrid`, and the matching entry must exist in `modes`.
 - `agent.json.agentName` and `agent.json.agentProjectName` are required in agent mode.
-- `agent.json.groundingStrategy` must be one of `pack`, `rag`, or `both`.
-- `agent.json.conversationResumePolicy` must be one of `resume` or `fresh`.
-- Unknown values for `voice.type`, `turntaking.activeMode`, `agent.groundingStrategy`, or `agent.conversationResumePolicy` fail fast at startup.
+- Unknown values for `voice.type` or `turntaking.activeMode` fail fast at startup.
+- Unknown JSON properties are handled **asymmetrically** by the four config files — do not assume they are universally ignored:
+  - **`agent.json` and `session.json`** — unrecognised properties are silently ignored by the JSON deserialiser.
+  - **`turntaking.json`** — every key under `modes` is deserialised and validated, not just the three documented ones. Adding an undocumented mode entry (e.g. `"modes": { "experimental": {} }`) produces the error `turntaking.json: modes.experimental.turnDetection: is required when manualTurn is false` and **startup fails**.
+  - **`avatar.json`** — the property `customized` is explicitly rejected (see below), regardless of its value.
+  - This section covers only these four JSON config files. `appsettings.json` and environment variables go through the ASP.NET configuration system and are subject to different rules.
 - `avatar.json.preview` is a local preview-avatar flag (required, boolean); preview avatars omit style and this field is not sent to Voice Live; missing, `null`, or non-boolean values are invalid.
 - `avatar.json.style` is required when `preview` is `false` and must not be present when `preview` is `true`; the presence of any `style` property alongside `preview: true` is rejected.
-- `avatar.json.customized` is not supported; the app always creates non-customized avatars regardless of config.
+- `avatar.json.customized` is **rejected at startup** with the error `avatar.json: customized: is not supported`; even `customized: false` fails. The app always creates non-customized avatars unconditionally in code.
 - `avatar.json.video.background` must be an object if present; null or any non-object value is invalid.
 - `avatar.json.video.background.imageUrl` is required within `video.background`, must be a string (numbers, booleans, arrays, and objects are invalid), and must be an absolute HTTPS URL.

@@ -182,13 +182,13 @@ public sealed class VoiceLiveWebSocketBridge(
                     if (IsAvatarCapacityError(errorCode))
                     {
                         logger.LogWarning(
-                            "Avatar rendering unavailable ({Code}); continuing voice-only. Service message: {Message}",
+                            "Avatar rendering unavailable ({Code}); avatar video and audio are both lost. Service message: {Message}",
                             errorCode, error.Error?.Message);
                         await SendJsonAsync(socket, new
                         {
                             t = "avatar-error",
                             code = errorCode,
-                            message = "Avatar rendering is unavailable on this Voice Live resource (capacity or quota). The voice session continues without avatar video. Request an avatar rendering quota increase for this resource, or point VoiceLive__Endpoint at an avatar-enabled resource."
+                            message = "Avatar rendering is unavailable on this Voice Live resource (capacity or quota). Avatar audio is lost along with the video, because both ride the same WebRTC peer connection — there is no voice-only fallback. Invoke your fallback plan. To fix: request an avatar rendering quota increase for this resource, or point VoiceLive__Endpoint at an avatar-enabled resource."
                         }, ct);
                         break;
                     }

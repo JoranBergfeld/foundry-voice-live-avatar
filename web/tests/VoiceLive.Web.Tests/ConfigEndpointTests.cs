@@ -29,8 +29,8 @@ public class ConfigEndpointTests : IClassFixture<TestAppFactory>
         var client = _factory.CreateClient();
         var form = new FormUrlEncodedContent(new[]
         {
-            new KeyValuePair<string, string>("username", "operator"),
-            new KeyValuePair<string, string>("password", "rehearsal"),
+            new KeyValuePair<string, string>("username", TestAppFactory.TestUsername),
+            new KeyValuePair<string, string>("password", TestAppFactory.TestPassword),
         });
         var login = await client.PostAsync("/login", form);
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
