@@ -57,37 +57,85 @@ That clears the platform runtime so deployment can use the app's self-contained 
 
 ### 3.1 Code-only redeploy to an existing web app
 
-When the infrastructure already exists and only the application code changed, do **not** run `azd up` — it re-runs provisioning and **overwrites `Auth__Password`** from the `AUTH_PASSWORD` environment variable, discarding any Key Vault reference (see [`production-deployment.md`](production-deployment.md) §2). Deploy the service alone:
+When the infrastructure already exists and only the application code changed, do **not** re-run provisioning. `azd up` re-applies the Bicep and **overwrites `Auth__Password`** from the `AUTH_PASSWORD` environment variable, discarding any Key Vault reference (see [`production-deployment.md`](production-deployment.md) §2).
+
+`azd` is **not required** for this. The Azure CLI path below is the reference procedure and works on any machine with the .NET SDK, Node.js and `az` — including a machine that never ran `azd`, one where the `.azure/` environment folder is gone, or an environment that was provisioned by hand or by a Bicep/ARM/Terraform pipeline instead of `azd`.
+
+#### Prerequisites
+
+- .NET 10 SDK, Node.js, Azure CLI, and a zip tool (`zip` on Linux/macOS, `Compress-Archive` on Windows).
+- `az login`, and `az account set --subscription <subscription-id>` if you have more than one.
+- **Deploy rights on the App Service only.** `Website Contributor` on the web app is sufficient; no rights on the Foundry resource are needed because the deploy does not touch it.
+
+#### Step 1 — Identify the target app
+
+If you do not already know the App Service name and resource group, list the apps in the subscription (the Bicep tags the site `azd-service-name: web`, and names follow `app-<token>`):
 
 ```bash
-az login && azd auth login
-azd env select <name>     # confirm with: azd env list
-azd deploy web
+az webapp list --query "[].{name:name, rg:resourceGroup, host:defaultHostName}" -o table
 ```
 
-`azd deploy web` reads `azure.yaml`, runs the `prebuild` hook (`npm ci && npm run build` in `web/frontend`), publishes `web/src/VoiceLive.Web`, and zip-deploys the output to the App Service already recorded in the `azd` environment. It touches no Bicep, no app settings, no RBAC and no Foundry resource.
+Record `<app>` and `<rg>`. They do not change between deployments — write them into the event runbook once.
 
-**What still ships with a "code-only" deploy.** The `/config` directory is included in the publish output as content (see `web/src/VoiceLive.Web.csproj`), and `wwwroot/app.js` is rebuilt from `web/frontend`. Any local edit to `config/` or the frontend goes out with this command — commit or revert deliberately before deploying.
+#### Step 2 — Match how the app was originally deployed
 
-**Without `azd`** (for example from a machine that has only the Azure CLI, or to redeploy a retained artifact):
+The publish flavour must match the App Service platform setting, or the site will start and immediately fail:
 
 ```bash
+az webapp config show --name <app> --resource-group <rg> --query linuxFxVersion -o tsv
+```
+
+| Result | Publish command |
+|---|---|
+| `DOTNETCORE\|10.0` (the default) | framework-dependent — `dotnet publish web/src/VoiceLive.Web -c Release -o /tmp/publish` |
+| empty | self-contained — `dotnet publish web/src/VoiceLive.Web -c Release -r linux-x64 --self-contained true -o /tmp/publish` |
+
+The empty case is the fallback used where `DOTNETCORE|10.0` is unavailable in the region (§3, above).
+
+#### Step 3 — Build, package and deploy
+
+```bash
+# from the repository root
 cd web/frontend && npm ci && npm run build && cd ../..
-dotnet publish web/src/VoiceLive.Web -c Release -o /tmp/publish
-cd /tmp/publish && zip -r ../app.zip . && cd -
+
+dotnet publish web/src/VoiceLive.Web -c Release -o /tmp/publish   # add the self-contained flags from step 2 if linuxFxVersion is empty
+
+rm -f /tmp/app.zip
+cd /tmp/publish && zip -r /tmp/app.zip . && cd -
 
 az webapp deploy --name <app> --resource-group <rg> --src-path /tmp/app.zip --type zip
 ```
 
-Use `azd env get-values` (or the App Service name printed by `azd up`) to find `<app>` and `<rg>`. If the target was provisioned with `LINUX_FX_VERSION` cleared, publish self-contained (`-r linux-x64 --self-contained true`) to match how it was originally deployed.
+On Windows PowerShell, replace the zip step with:
 
-**After every code-only deploy:**
+```powershell
+Compress-Archive -Path C:\temp\publish\* -DestinationPath C:\temp\app.zip -Force
+```
+
+Build the frontend **before** publishing: `dotnet publish` runs the `BuildFrontend` MSBuild target itself (`web/src/VoiceLive.Web/VoiceLive.Web.csproj`), so the explicit `npm` step is only needed if you pass `-p:SkipFrontendBuild=true` or `npm` is not on the publishing machine's PATH — but running it makes the bundle state explicit and is safe either way.
+
+`az webapp deploy` replaces the site content and restarts the app. It does **not** change app settings, RBAC, the App Service plan, or the Foundry resource, so `Auth__Password`, `VoiceLive__Endpoint`, Key Vault references and the managed identity all survive untouched. Keep `/tmp/app.zip` — it is the artifact you roll back to.
+
+#### What still ships with a "code-only" deploy
+
+The `/config` directory is included in the publish output as content (see `web/src/VoiceLive.Web/VoiceLive.Web.csproj`), and `wwwroot/app.js` is rebuilt from `web/frontend`. Any local edit to `config/` or the frontend goes out with this deploy — commit or revert deliberately before publishing.
+
+#### Optional shortcut if you do use `azd`
+
+```bash
+azd env select <name>     # confirm with: azd env list
+azd deploy web
+```
+
+`azd deploy web` performs exactly the steps above using the App Service recorded in the `azd` environment: it runs the `azure.yaml` prebuild hook (`npm ci && npm run build`), publishes `web/src/VoiceLive.Web`, and zip-deploys the output. Unlike `azd up` it skips provisioning entirely. Use it only when a local `azd` environment exists; otherwise use the Azure CLI path.
+
+#### After every code-only deploy
 
 1. Deployment restarts the app, which **drops every live session** — never deploy during a show.
-2. Check `curl -s https://<app>.azurewebsites.net/api/health` returns 200.
+2. Check `curl -s https://<app>.azurewebsites.net/api/health` returns 200. A 503 means config failed to load; see §10.
 3. Sign in and run the manual avatar end-to-end check (§7).
 
-Rollback is a re-deploy of the previous artifact; see [`production-deployment.md`](production-deployment.md) §7.
+Rollback is a re-deploy of the previous artifact with the same `az webapp deploy` command; see [`production-deployment.md`](production-deployment.md) §7.
 
 ## 4. RBAC and authentication
 
