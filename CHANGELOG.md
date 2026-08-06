@@ -24,6 +24,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Moved unmaintained material under `docs/history/`: `docs/initial-spec.md` is now `docs/history/initial-spec.md`, and `docs/superpowers/` is now `docs/history/superpowers/`. External links to the old paths will break.
 
 ### Fixed
+- Documentation tests scanned nested git working copies (`.worktrees/`), so running the suite from the main checkout reported other branches' historical documents as live defects. The scan now skips any directory that is itself a working copy.
 - The `avatar-error` message shown to the operator claimed "the voice session continues without avatar video". Avatar audio rides the same WebRTC peer connection as the video, so it is lost too. The message now says so and points at the fallback plan.
 - `docs/runbook.md` and `docs/rehearsal-checklist.md` gave a local run command without `ConfigDir`, which starts the app unhealthy (`/api/health` returns 503).
 

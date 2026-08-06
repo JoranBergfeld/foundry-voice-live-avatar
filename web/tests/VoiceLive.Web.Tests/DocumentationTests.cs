@@ -28,6 +28,12 @@ public sealed class DocumentationTests
         return Directory
             .EnumerateFiles(root, "*.md", SearchOption.AllDirectories)
             .Select(p => Path.GetRelativePath(root, p).Replace('\\', '/'))
+            // Nested working copies (git worktrees under .worktrees/, submodules, vendored clones)
+            // are not this repository's content. Without this, running the suite from the main
+            // checkout scans every branch checked out under .worktrees/ and reports their
+            // historical documents as live defects — while running it from inside a worktree sees
+            // nothing, because RepoRoot is then the worktree itself.
+            .Where(rel => !IsInNestedWorkingCopy(root, rel))
             .Where(rel => !rel.StartsWith("docs/history/superpowers/", StringComparison.Ordinal))
             .Where(rel => !rel.StartsWith("docs/history/", StringComparison.Ordinal))
             .Where(rel => !rel.Contains("/bin/", StringComparison.Ordinal))
@@ -38,6 +44,31 @@ public sealed class DocumentationTests
             .Where(rel => !Regex.IsMatch(Path.GetFileNameWithoutExtension(rel), @"(^|[-_])review([-_]|$)", RegexOptions.IgnoreCase))
             .OrderBy(rel => rel, StringComparer.Ordinal)
             .ToList();
+    }
+
+    /// <summary>
+    /// True when <paramref name="rel"/> sits under a directory that is itself a git working copy.
+    /// A linked worktree carries a <c>.git</c> <em>file</em>; a clone or submodule a <c>.git</c>
+    /// <em>directory</em>. Either marks content that belongs to another checkout, not to this one.
+    /// The repository root is excluded from the walk, since it always has one.
+    /// </summary>
+    private static bool IsInNestedWorkingCopy(string root, string rel)
+    {
+        var segments = rel.Split('/');
+        var current = root;
+
+        // Walk the directory prefix only; the final segment is the file itself.
+        for (var i = 0; i < segments.Length - 1; i++)
+        {
+            current = Path.Combine(current, segments[i]);
+            var marker = Path.Combine(current, ".git");
+            if (File.Exists(marker) || Directory.Exists(marker))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Fenced code block: optional indentation, 3+ backticks or tildes, optional info string, any content, closing fence.
