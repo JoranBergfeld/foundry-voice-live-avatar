@@ -34,6 +34,9 @@ public sealed class DocumentationTests
             // historical documents as live defects — while running it from inside a worktree sees
             // nothing, because RepoRoot is then the worktree itself.
             .Where(rel => !IsInNestedWorkingCopy(root, rel))
+            // No documentation lives in a hidden directory, but transient scratch directories do
+            // appear there during a run. Enumerating them races whatever created them.
+            .Where(rel => !rel.Split('/')[..^1].Any(segment => segment.StartsWith('.')))
             .Where(rel => !rel.StartsWith("docs/history/superpowers/", StringComparison.Ordinal))
             .Where(rel => !rel.StartsWith("docs/history/", StringComparison.Ordinal))
             .Where(rel => !rel.Contains("/bin/", StringComparison.Ordinal))

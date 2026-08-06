@@ -446,9 +446,13 @@ public class ServerSessionConfigTests
 
         public static TemporaryConfig CopyOf(string source)
         {
+            // Deliberately outside the repository tree. These scratch copies contain markdown
+            // (config/grounding/*.md), so creating them next to the real config made them visible
+            // to the documentation tests, which enumerate *.md under the repo root — and those
+            // tests then raced this type's Dispose, failing with DirectoryNotFoundException.
             var destination = Path.Combine(
-                Path.GetDirectoryName(source)!,
-                $".test-config-{Guid.NewGuid():N}");
+                Path.GetTempPath(),
+                $"voicelive-test-config-{Guid.NewGuid():N}");
             CopyDirectory(source, destination);
 
             return new TemporaryConfig(destination);
