@@ -55,6 +55,40 @@ azd up
 
 That clears the platform runtime so deployment can use the app's self-contained publish output.
 
+### 3.1 Code-only redeploy to an existing web app
+
+When the infrastructure already exists and only the application code changed, do **not** run `azd up` — it re-runs provisioning and **overwrites `Auth__Password`** from the `AUTH_PASSWORD` environment variable, discarding any Key Vault reference (see [`production-deployment.md`](production-deployment.md) §2). Deploy the service alone:
+
+```bash
+az login && azd auth login
+azd env select <name>     # confirm with: azd env list
+azd deploy web
+```
+
+`azd deploy web` reads `azure.yaml`, runs the `prebuild` hook (`npm ci && npm run build` in `web/frontend`), publishes `web/src/VoiceLive.Web`, and zip-deploys the output to the App Service already recorded in the `azd` environment. It touches no Bicep, no app settings, no RBAC and no Foundry resource.
+
+**What still ships with a "code-only" deploy.** The `/config` directory is included in the publish output as content (see `web/src/VoiceLive.Web.csproj`), and `wwwroot/app.js` is rebuilt from `web/frontend`. Any local edit to `config/` or the frontend goes out with this command — commit or revert deliberately before deploying.
+
+**Without `azd`** (for example from a machine that has only the Azure CLI, or to redeploy a retained artifact):
+
+```bash
+cd web/frontend && npm ci && npm run build && cd ../..
+dotnet publish web/src/VoiceLive.Web -c Release -o /tmp/publish
+cd /tmp/publish && zip -r ../app.zip . && cd -
+
+az webapp deploy --name <app> --resource-group <rg> --src-path /tmp/app.zip --type zip
+```
+
+Use `azd env get-values` (or the App Service name printed by `azd up`) to find `<app>` and `<rg>`. If the target was provisioned with `LINUX_FX_VERSION` cleared, publish self-contained (`-r linux-x64 --self-contained true`) to match how it was originally deployed.
+
+**After every code-only deploy:**
+
+1. Deployment restarts the app, which **drops every live session** — never deploy during a show.
+2. Check `curl -s https://<app>.azurewebsites.net/api/health` returns 200.
+3. Sign in and run the manual avatar end-to-end check (§7).
+
+Rollback is a re-deploy of the previous artifact; see [`production-deployment.md`](production-deployment.md) §7.
+
 ## 4. RBAC and authentication
 
 The web app uses two authentication layers:
