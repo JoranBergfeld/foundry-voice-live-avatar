@@ -204,6 +204,8 @@ azd up
 
 The `postprovision` hook runs `scripts/setup-agent.sh` (or `.ps1`) which lists existing agents and prints the steps above. See [docs/runbook.md](docs/runbook.md) for environment variables, self-contained deployment, region availability, and day-two operations.
 
+**Updating only the code** on an already-provisioned environment: build, publish and `az webapp deploy --type zip` (or `azd deploy web` if you use `azd`) — never `azd up`, which re-provisions and overwrites app settings including any Key Vault reference for the password. Full Azure-CLI-only procedure: [docs/runbook.md §3.1](docs/runbook.md#31-code-only-redeploy-to-an-existing-web-app).
+
 ## Session startup
 
 ```mermaid
