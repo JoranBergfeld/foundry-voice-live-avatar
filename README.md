@@ -206,6 +206,8 @@ The `postprovision` hook runs `scripts/setup-agent.sh` (or `.ps1`) which lists e
 
 Agent mode reads the selected agent version's `microsoft.voice-live.configuration` metadata from Foundry and maps its supported voice, avatar, transcription, noise handling, and turn-detection values into `session.update`. This is required because `SessionTarget.FromAgent(...)` does not populate those media settings on the Voice Live session. The app does not source those values from local session/avatar files and does not send local model, instructions, or tools. Configure them on the hosted agent; the web app retains browser, transport, and hosted-metadata adaptation responsibilities.
 
+**Updating only the code** on an already-provisioned environment: build, publish and `az webapp deploy --type zip` (or `azd deploy web` if you use `azd`) — never `azd up`, which re-provisions and overwrites app settings including any Key Vault reference for the password. Full Azure-CLI-only procedure: [docs/runbook.md §3.1](docs/runbook.md#31-code-only-redeploy-to-an-existing-web-app).
+
 ## Session startup
 
 ```mermaid
