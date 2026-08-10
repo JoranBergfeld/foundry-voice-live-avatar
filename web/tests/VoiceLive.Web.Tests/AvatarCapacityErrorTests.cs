@@ -14,7 +14,7 @@ public class AvatarCapacityErrorTests
     [InlineData(null, false)]
     public void IsAvatarCapacityError_classifies_avatar_capacity_signals(string? signal, bool expected)
     {
-        var method = typeof(VoiceLiveWebSocketBridge).GetMethod(
+        var method = typeof(VoiceLiveUpdateHandler).GetMethod(
             "IsAvatarCapacityError",
             BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
