@@ -221,24 +221,16 @@ public class ServerSessionConfigTests
     }
 
     [Fact]
-    public void BuildForAgent_omits_model_and_instructions_but_keeps_voice_avatar_and_audio()
+    public void Build_returns_local_options_for_model_mode()
     {
         var config = AppConfigLoader.Load(RepoConfigDir, ModelOpts()).Server;
 
-        var options = SessionOptionsBuilder.BuildForAgent(config);
+        var options = SessionOptionsBuilder.Build(config, "Keep answers short.");
 
-        Assert.Null(options.Model);
-        Assert.Null(options.Instructions);
-        Assert.IsType<AzureStandardVoice>(options.Voice);
-        Assert.Equal(InputAudioFormat.Pcm16, options.InputAudioFormat);
-        Assert.Equal(OutputAudioFormat.Pcm16, options.OutputAudioFormat);
-        Assert.Equal(24000, options.InputAudioSamplingRate);
-        Assert.NotNull(options.Avatar);
-        Assert.False(options.Avatar.Customized);
+        Assert.NotNull(options);
+        Assert.Equal("gpt-realtime", options.Model);
+        Assert.Equal("Keep answers short.", options.Instructions);
         Assert.Equal("lisa", options.Avatar.Character);
-        Assert.Equal("casual-sitting", options.Avatar.Style);
-        Assert.Contains(options.Modalities, m => m.Equals(InteractionModality.Text));
-        Assert.Contains(options.Modalities, m => m.Equals(InteractionModality.Audio));
     }
 
     // ── Task 1: avatar preview / background ───────────────────────────────────

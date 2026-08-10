@@ -12,7 +12,9 @@ The `/config` directory contains the web app's JSON config files. All values bel
 | `Auth:Username` | string | Required | No default | App login username. Set via `dotnet user-secrets` locally, `Auth__Username` in Azure. |
 | `Auth:Password` | string | Required | No default | App login password. Set via `dotnet user-secrets` locally, `Auth__Password` in Azure. Never commit this value or store it in an App Service setting in production — see [`production-deployment.md`](production-deployment.md). |
 
-`endpoint`, `apiVersion`, and `mode` are no longer in `config/session.json`. `session.model` is required only in **model** mode; in **agent** mode the Voice Live agent owns the model. Agent name and project live in `config/agent.json`.
+`endpoint`, `apiVersion`, and `mode` are no longer in `config/session.json`. `session.model` is required only in **model** mode. Agent name and project live in `config/agent.json`.
+
+In **agent** mode, the web app starts the named hosted agent, reads the selected version's `microsoft.voice-live.configuration` metadata from Foundry, and maps its supported voice, avatar, transcription, noise handling, and turn-detection values into `session.update`. This adaptation is required because `SessionTarget.FromAgent(...)` does not populate those media settings on the Voice Live session. The app sends no local model, instructions, tools, voice, avatar, transcription, noise-handling, or turn-detection values; the hosted agent remains their source of truth. The local session, turn-taking, and avatar files are still loaded for the browser-safe configuration projection and model mode, but they do not override the hosted agent.
 
 Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio worklet resamples from the actual browser audio context rate before sending microphone audio.
 
@@ -21,7 +23,7 @@ Browser audio transport is fixed at 24 kHz mono signed PCM16. The browser audio 
 | Field | Type | Required | Allowed values / default | Description |
 | --- | --- | --- | --- | --- |
 | `region` | string | Required | Default: `swedencentral` | Azure region for the Voice Live resource. |
-| `model` | string | Required in model mode | Default: `gpt-realtime` | Realtime model name. In agent mode the configured agent owns the model. |
+| `model` | string | Required in model mode | Default: `gpt-realtime` | Realtime model name used in model mode. |
 | `voice` | object | Required | Contains `type`, `name` | Voice selection. |
 | `voice.type` | string | Required | `azure-realtime-native`, `azure-standard`, `openai`; default: `azure-realtime-native` | Voice provider/type. |
 | `voice.name` | string | Required | Default: `en-US-AndrewNeural` | Voice name. |

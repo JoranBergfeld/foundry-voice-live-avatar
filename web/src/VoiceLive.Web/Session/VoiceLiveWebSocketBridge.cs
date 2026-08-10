@@ -12,6 +12,7 @@ public sealed class VoiceLiveWebSocketBridge(
     ServerSessionConfig config,
     TokenCredential credential,
     string modelInstructions,
+    HostedAgentSessionOptionsProvider hostedAgentOptions,
     ILogger<VoiceLiveWebSocketBridge> logger)
 {
     private static readonly Meter Meter = new("VoiceLive.Web");
@@ -24,7 +25,7 @@ public sealed class VoiceLiveWebSocketBridge(
         var sessionId = Guid.NewGuid().ToString("N")[..8];
         using var scope = logger.BeginScope("session:{SessionId}", sessionId);
         using var transport = new WebSocketTransport(socket, logger);
-        var sessionFactory = new VoiceLiveSessionFactory(config, credential, modelInstructions, logger);
+        var sessionFactory = new VoiceLiveSessionFactory(config, credential, modelInstructions, hostedAgentOptions, logger);
         var updateHandler = new VoiceLiveUpdateHandler(config, transport, logger, Errors);
         var browserHandler = new BrowserMessageHandler(config, transport, logger);
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -98,6 +99,7 @@ public sealed class VoiceLiveWebSocketBridge(
     private string SafeError(Exception ex) => ex switch
     {
         WebConfigValidationException cfg => cfg.Message,
+        HostedAgentConfigurationException cfg => cfg.Message,
         RequestFailedException rfe => $"Voice Live request failed (status {rfe.Status}, code {rfe.ErrorCode}). Check endpoint, model, API version, and Azure role assignments.",
         _ => "Voice Live session failed. Check server logs and Azure credential/configuration."
     };

@@ -15,9 +15,6 @@ public static class SessionOptionsBuilder
         return options;
     }
 
-    public static VoiceLiveSessionOptions BuildForAgent(ServerSessionConfig config)
-        => BuildCommon(config); // agent owns Model + Instructions
-
     private static VoiceLiveSessionOptions BuildCommon(ServerSessionConfig config)
     {
         var options = new VoiceLiveSessionOptions

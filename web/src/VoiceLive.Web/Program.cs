@@ -59,6 +59,9 @@ builder.Services.AddSingleton<Azure.Core.TokenCredential>(_ =>
     if (!string.IsNullOrWhiteSpace(clientId)) options.ManagedIdentityClientId = clientId;
     return new Azure.Identity.DefaultAzureCredential(options);
 });
+builder.Services.AddSingleton(sp => new VoiceLive.Web.Session.HostedAgentSessionOptionsProvider(
+    new HttpClient(),
+    sp.GetRequiredService<Azure.Core.TokenCredential>()));
 builder.Services.AddSingleton<VoiceLive.Web.Session.IVoiceLiveBridgeFactory, VoiceLive.Web.Session.VoiceLiveBridgeFactory>();
 var otel = builder.Services.AddOpenTelemetry().WithMetrics(m => m.AddMeter("VoiceLive.Web"));
 if (!string.IsNullOrWhiteSpace(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))

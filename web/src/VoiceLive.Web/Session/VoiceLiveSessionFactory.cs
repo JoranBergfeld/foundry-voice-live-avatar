@@ -8,6 +8,7 @@ internal sealed class VoiceLiveSessionFactory(
     ServerSessionConfig config,
     TokenCredential credential,
     string modelInstructions,
+    HostedAgentSessionOptionsProvider hostedAgentOptions,
     ILogger logger)
 {
     internal async Task<VoiceLiveSession> CreateAsync(CancellationToken ct)
@@ -26,15 +27,17 @@ internal sealed class VoiceLiveSessionFactory(
                 logger.LogInformation("Starting Voice Live session in AGENT mode ({Agent} / {Project})", config.Agent.AgentName, config.Agent.AgentProjectName);
                 var agent = new AgentSessionConfig(config.Agent.AgentName, config.Agent.AgentProjectName);
                 session = await client.StartSessionAsync(SessionTarget.FromAgent(agent), ct);
-                await session.ConfigureSessionAsync(SessionOptionsBuilder.BuildForAgent(config), ct);
             }
             else
             {
                 logger.LogInformation("Starting Voice Live session in MODEL mode ({Model})", config.Model);
                 session = await client.StartSessionAsync(config.Model, ct);
-                var sessionOptions = SessionOptionsBuilder.Build(config, modelInstructions);
-                await session.ConfigureSessionAsync(sessionOptions, ct);
             }
+
+            var sessionOptions = config.Mode == SessionModeResolver.Agent
+                ? await hostedAgentOptions.LoadAsync(new Uri(config.Endpoint), config.Agent, ct)
+                : SessionOptionsBuilder.Build(config, modelInstructions);
+            await session.ConfigureSessionAsync(sessionOptions, ct);
 
             return session;
         }

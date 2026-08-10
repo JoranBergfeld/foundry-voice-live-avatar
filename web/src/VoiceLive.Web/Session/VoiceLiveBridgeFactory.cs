@@ -8,9 +8,17 @@ public interface IVoiceLiveBridgeFactory
     VoiceLiveWebSocketBridge Create(AppConfig appConfig);
 }
 
-public sealed class VoiceLiveBridgeFactory(TokenCredential credential, ILoggerFactory loggerFactory)
+public sealed class VoiceLiveBridgeFactory(
+    TokenCredential credential,
+    HostedAgentSessionOptionsProvider hostedAgentOptions,
+    ILoggerFactory loggerFactory)
     : IVoiceLiveBridgeFactory
 {
     public VoiceLiveWebSocketBridge Create(AppConfig appConfig)
-        => new(appConfig.Server, credential, appConfig.ModelInstructions, loggerFactory.CreateLogger<VoiceLiveWebSocketBridge>());
+        => new(
+            appConfig.Server,
+            credential,
+            appConfig.ModelInstructions,
+            hostedAgentOptions,
+            loggerFactory.CreateLogger<VoiceLiveWebSocketBridge>());
 }

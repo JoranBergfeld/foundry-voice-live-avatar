@@ -138,7 +138,7 @@ To enable agent mode:
 3. Run `azd env set VOICELIVE_MODE agent`.
 4. Run `azd up` again.
 
-The postprovision hook detects and lists existing agents and prints these opt-in steps. It does not create or modify agents. In agent mode the agent owns the model, instructions, and hosted tools; voice, avatar, audio, and turn-taking still come from app config.
+The postprovision hook detects and lists existing agents and prints these opt-in steps. It does not create or modify agents. Agent mode reads the selected agent version's `microsoft.voice-live.configuration` metadata from Foundry and maps its supported voice, avatar, transcription, noise handling, and turn-detection values into `session.update`; `SessionTarget.FromAgent(...)` does not populate those media settings itself. The app sends no local model, instructions, tools, voice, avatar, transcription, noise-handling, or turn-detection values. Configure them on the hosted agent; this keeps local and deployed web app instances from overriding the agent with different repository configuration. The app identity needs `Cognitive Services User` and `Foundry User`. The hosted input format must remain compatible with the browser's fixed 24 kHz mono PCM16 transport.
 
 ## 9. Failure handling
 

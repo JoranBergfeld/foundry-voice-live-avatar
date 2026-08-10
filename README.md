@@ -204,6 +204,8 @@ azd up
 
 The `postprovision` hook runs `scripts/setup-agent.sh` (or `.ps1`) which lists existing agents and prints the steps above. See [docs/runbook.md](docs/runbook.md) for environment variables, self-contained deployment, region availability, and day-two operations.
 
+Agent mode reads the selected agent version's `microsoft.voice-live.configuration` metadata from Foundry and maps its supported voice, avatar, transcription, noise handling, and turn-detection values into `session.update`. This is required because `SessionTarget.FromAgent(...)` does not populate those media settings on the Voice Live session. The app does not source those values from local session/avatar files and does not send local model, instructions, or tools. Configure them on the hosted agent; the web app retains browser, transport, and hosted-metadata adaptation responsibilities.
+
 ## Session startup
 
 ```mermaid

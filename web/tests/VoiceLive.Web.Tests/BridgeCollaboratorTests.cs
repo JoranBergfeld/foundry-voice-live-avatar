@@ -1,6 +1,11 @@
+using System.Diagnostics.Metrics;
 using System.Net.WebSockets;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
+using Azure.AI.VoiceLive;
+using System.ClientModel.Primitives;
+using VoiceLive.Web.Config;
 using VoiceLive.Web.Session;
 
 public class BridgeCollaboratorTests
@@ -39,6 +44,130 @@ public class BridgeCollaboratorTests
         Assert.Equal("message too big", socket.CloseDescriptionSent);
     }
 
+    [Fact]
+    public async Task Agent_session_updated_sends_ready_with_hosted_avatar_configuration()
+    {
+        var update = CreateSessionUpdated();
+        var config = AppConfigLoader.Load(
+            TestAppFactory.RepoConfigDir,
+            new VoiceLiveOptions { Endpoint = "https://x", Mode = "agent", ApiVersion = "2025-10-01" }).Server;
+        var socket = TestWebSocket.TextFragments();
+        using var transport = new WebSocketTransport(socket);
+        using var meter = new Meter("VoiceLive.Web.Tests");
+        var handler = new VoiceLiveUpdateHandler(
+            config,
+            transport,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+            meter.CreateCounter<long>("errors"));
+
+        Assert.True(await handler.HandleAsync(update, CancellationToken.None));
+
+        var ready = Assert.Single(socket.SentTexts);
+        using var document = JsonDocument.Parse(ready);
+        Assert.Equal("ready", document.RootElement.GetProperty("t").GetString());
+        Assert.Equal("hosted-character", document.RootElement.GetProperty("config").GetProperty("avatarCharacter").GetString());
+        Assert.Equal("hosted-style", document.RootElement.GetProperty("config").GetProperty("avatarStyle").GetString());
+        Assert.Equal("turn:relay.example.test", document.RootElement.GetProperty("iceServers")[0].GetProperty("urls")[0].GetString());
+    }
+
+    [Fact]
+    public async Task Agent_session_updated_does_not_fall_back_to_local_avatar_style()
+    {
+        var update = CreateSessionUpdated(avatarStyle: null);
+        var config = AppConfigLoader.Load(
+            TestAppFactory.RepoConfigDir,
+            new VoiceLiveOptions { Endpoint = "https://x", Mode = "agent", ApiVersion = "2025-10-01" }).Server;
+        var socket = TestWebSocket.TextFragments();
+        using var transport = new WebSocketTransport(socket);
+        using var meter = new Meter("VoiceLive.Web.Tests");
+        var handler = new VoiceLiveUpdateHandler(
+            config,
+            transport,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+            meter.CreateCounter<long>("errors"));
+
+        Assert.True(await handler.HandleAsync(update, CancellationToken.None));
+
+        using var ready = JsonDocument.Parse(Assert.Single(socket.SentTexts));
+        Assert.Equal(JsonValueKind.Null, ready.RootElement.GetProperty("config").GetProperty("avatarStyle").ValueKind);
+    }
+
+    [Fact]
+    public async Task Agent_session_created_waits_for_required_session_update()
+    {
+        var config = AppConfigLoader.Load(
+            TestAppFactory.RepoConfigDir,
+            new VoiceLiveOptions { Endpoint = "https://x", Mode = "agent", ApiVersion = "2025-10-01" }).Server;
+        var socket = TestWebSocket.TextFragments();
+        using var transport = new WebSocketTransport(socket);
+        using var meter = new Meter("VoiceLive.Web.Tests");
+        var handler = new VoiceLiveUpdateHandler(
+            config,
+            transport,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+            meter.CreateCounter<long>("errors"));
+
+        Assert.True(await handler.HandleAsync(CreateSessionCreated(), CancellationToken.None));
+
+        Assert.Empty(socket.SentTexts);
+    }
+
+    [Fact]
+    public async Task Model_session_created_waits_for_configured_session_update()
+    {
+        var config = AppConfigLoader.Load(
+            TestAppFactory.RepoConfigDir,
+            new VoiceLiveOptions { Endpoint = "https://x", Mode = "model", ApiVersion = "2025-10-01" }).Server;
+        var socket = TestWebSocket.TextFragments();
+        using var transport = new WebSocketTransport(socket);
+        using var meter = new Meter("VoiceLive.Web.Tests");
+        var handler = new VoiceLiveUpdateHandler(
+            config,
+            transport,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+            meter.CreateCounter<long>("errors"));
+
+        Assert.True(await handler.HandleAsync(CreateSessionCreated(), CancellationToken.None));
+
+        Assert.Empty(socket.SentTexts);
+    }
+
+    private static SessionUpdateSessionCreated CreateSessionCreated()
+    {
+        return ModelReaderWriter.Read<SessionUpdateSessionCreated>(BinaryData.FromString(SessionEventJson("session.created")))
+            ?? throw new InvalidOperationException("Could not deserialize test session.created event.");
+    }
+
+    private static SessionUpdateSessionUpdated CreateSessionUpdated(string? avatarStyle = "hosted-style")
+    {
+        return ModelReaderWriter.Read<SessionUpdateSessionUpdated>(BinaryData.FromString(SessionEventJson("session.updated", avatarStyle)))
+            ?? throw new InvalidOperationException("Could not deserialize test session.updated event.");
+    }
+
+    private static string SessionEventJson(string type, string? avatarStyle = "hosted-style") => $$"""
+            {
+              "type": "{{type}}",
+              "event_id": "evt-1",
+              "session": {
+                "id": "session-1",
+                "model": "hosted-model",
+                "modalities": ["text", "audio"],
+                "avatar": {
+                  "character": "hosted-character",
+                  "style": {{JsonSerializer.Serialize(avatarStyle)}},
+                  "customized": false,
+                  "ice_servers": [
+                    {
+                      "urls": ["turn:relay.example.test"],
+                      "username": "relay-user",
+                      "credential": "relay-secret"
+                    }
+                  ]
+                }
+              }
+            }
+            """;
+
     private sealed class TestWebSocket : WebSocket
     {
         private readonly Queue<Fragment> _fragments;
@@ -53,6 +182,7 @@ public class BridgeCollaboratorTests
 
         internal WebSocketCloseStatus? CloseStatusSent { get; private set; }
         internal string? CloseDescriptionSent { get; private set; }
+        internal List<string> SentTexts { get; } = [];
 
         public override WebSocketCloseStatus? CloseStatus => null;
         public override string? CloseStatusDescription => null;
@@ -117,7 +247,11 @@ public class BridgeCollaboratorTests
             WebSocketMessageType messageType,
             bool endOfMessage,
             CancellationToken cancellationToken)
-            => Task.CompletedTask;
+        {
+            if (messageType == WebSocketMessageType.Text)
+                SentTexts.Add(Encoding.UTF8.GetString(buffer));
+            return Task.CompletedTask;
+        }
 
         private sealed record Fragment(
             byte[] Payload,

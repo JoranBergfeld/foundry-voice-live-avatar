@@ -19,26 +19,12 @@ internal sealed class VoiceLiveUpdateHandler(
     {
         switch (update)
         {
+            case SessionUpdateSessionCreated created:
+                LogAvatarMetadata("created", created.Session);
+                break;
             case SessionUpdateSessionUpdated updated:
-                _iceServers = BuildIceServers(updated.Session?.Avatar?.IceServers);
-                if (!_readySent)
-                {
-                    _readySent = true;
-                    await transport.SendJsonAsync(new
-                    {
-                        t = "ready",
-                        config = new
-                        {
-                            mode = config.Mode,
-                            activeMode = config.TurnTaking.ActiveMode,
-                            agentName = config.Agent.AgentName,
-                            safeQuestions = config.Agent.SafeQuestions,
-                            avatarCharacter = config.Avatar.Character,
-                            avatarStyle = config.Avatar.Style
-                        },
-                        iceServers = _iceServers
-                    }, ct);
-                }
+                LogAvatarMetadata("updated", updated.Session);
+                await SendReadyAsync(updated.Session, ct);
                 break;
             case SessionUpdateConversationItemInputAudioTranscriptionDelta delta:
                 await transport.SendJsonAsync(new { t = "user-transcript", text = delta.Delta, final = false }, ct);
@@ -121,6 +107,40 @@ internal sealed class VoiceLiveUpdateHandler(
         }
 
         return true;
+    }
+
+    private void LogAvatarMetadata(string phase, VoiceLiveSessionResponse? session)
+    {
+        logger.LogInformation(
+            "Voice Live session {Phase}: avatar={Character}/{Style}, iceServers={IceServerCount}",
+            phase,
+            session?.Avatar?.Character ?? "<none>",
+            session?.Avatar?.Style ?? "<none>",
+            session?.Avatar?.IceServers?.Count ?? 0);
+    }
+
+    private async Task SendReadyAsync(VoiceLiveSessionResponse? session, CancellationToken ct)
+    {
+        _iceServers = BuildIceServers(session?.Avatar?.IceServers);
+        if (_readySent) return;
+
+        _readySent = true;
+        var agentMode = config.Mode == SessionModeResolver.Agent;
+        var hostedAvatar = agentMode ? session?.Avatar : null;
+        await transport.SendJsonAsync(new
+        {
+            t = "ready",
+            config = new
+            {
+                mode = config.Mode,
+                activeMode = config.TurnTaking.ActiveMode,
+                agentName = config.Agent.AgentName,
+                safeQuestions = config.Agent.SafeQuestions,
+                avatarCharacter = agentMode ? hostedAvatar?.Character : config.Avatar.Character,
+                avatarStyle = agentMode ? hostedAvatar?.Style : config.Avatar.Style
+            },
+            iceServers = _iceServers
+        }, ct);
     }
 
     private Task SendToolAsync(string phase, string? name, string? callId, CancellationToken ct)
