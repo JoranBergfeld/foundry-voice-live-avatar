@@ -448,6 +448,9 @@ var require_main = __commonJS({
     function isInteractiveView(view) {
       return "holdButton" in view;
     }
+    function isSubtitleView(view) {
+      return "setAgentSubtitle" in view;
+    }
     function parseServerFrame(data) {
       const frame = JSON.parse(data);
       if (typeof frame.t !== "string") throw new Error("server frame missing t");
@@ -545,8 +548,11 @@ var require_main = __commonJS({
             await this.onAvatarAnswer(frame.sdp, token);
             break;
           case "user-transcript":
+            this.interactive?.addTranscript("user", frame.text, frame.final);
+            break;
           case "agent-transcript":
-            this.interactive?.addTranscript(frame.t === "user-transcript" ? "user" : "agent", frame.text, frame.final);
+            this.interactive?.addTranscript("agent", frame.text, frame.final);
+            if (isSubtitleView(this.view)) this.view.setAgentSubtitle(frame.text, frame.final);
             break;
           case "speech-started":
             this.setStatus("speech", "started");
@@ -562,6 +568,7 @@ var require_main = __commonJS({
             break;
           case "response-done":
             this.setStatus("turn", "response done");
+            if (isSubtitleView(this.view)) this.view.completeAgentSubtitle();
             break;
           case "tool": {
             const label = frame.name ? `${frame.phase}: ${frame.name}` : frame.phase;
@@ -796,6 +803,7 @@ var require_main = __commonJS({
         else this.view.setStatus(`Avatar unavailable: ${message}`);
       }
       fail(message) {
+        if (isSubtitleView(this.view)) this.view.clearAgentSubtitle();
         if (this.interactive) this.interactive.setError(message);
         else this.view.setError(message);
       }
@@ -811,6 +819,7 @@ var require_main = __commonJS({
         this.gatedHoldIntent = void 0;
         this.interactive?.setReady(false);
         this.interactive?.setHoldActive(false);
+        if (isSubtitleView(this.view)) this.view.clearAgentSubtitle();
         const cleanup = (async () => {
           if (this.pingId) {
             window.clearInterval(this.pingId);

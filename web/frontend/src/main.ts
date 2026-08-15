@@ -1,4 +1,4 @@
-import { renderDisplayView, renderLandingView, renderOperatorView, type DisplayView, type InteractiveView, type OperatorView, type ReadyConfig } from "./views";
+import { renderDisplayView, renderLandingView, renderOperatorView, type DisplayView, type InteractiveView, type OperatorView, type ReadyConfig, type SubtitleView } from "./views";
 
 type IceServerFrame = { urls: string[]; username?: string; credential?: string };
 type ReadyFrame = { t: "ready"; config: ReadyConfig; iceServers: IceServerFrame[] };
@@ -28,6 +28,10 @@ const wsUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.hos
 
 function isInteractiveView(view: InteractiveView | DisplayView): view is InteractiveView {
   return "holdButton" in view;
+}
+
+function isSubtitleView(view: InteractiveView | DisplayView): view is (InteractiveView | DisplayView) & SubtitleView {
+  return "setAgentSubtitle" in view;
 }
 
 function parseServerFrame(data: string): ServerFrame {
@@ -136,8 +140,11 @@ class ThinVoiceLiveClient {
         await this.onAvatarAnswer(frame.sdp, token);
         break;
       case "user-transcript":
+        this.interactive?.addTranscript("user", frame.text, frame.final);
+        break;
       case "agent-transcript":
-        this.interactive?.addTranscript(frame.t === "user-transcript" ? "user" : "agent", frame.text, frame.final);
+        this.interactive?.addTranscript("agent", frame.text, frame.final);
+        if (isSubtitleView(this.view)) this.view.setAgentSubtitle(frame.text, frame.final);
         break;
       case "speech-started":
         this.setStatus("speech", "started");
@@ -153,6 +160,7 @@ class ThinVoiceLiveClient {
         break;
       case "response-done":
         this.setStatus("turn", "response done");
+        if (isSubtitleView(this.view)) this.view.completeAgentSubtitle();
         break;
       case "tool": {
         const label = frame.name ? `${frame.phase}: ${frame.name}` : frame.phase;
@@ -421,6 +429,7 @@ class ThinVoiceLiveClient {
   }
 
   private fail(message: string) {
+    if (isSubtitleView(this.view)) this.view.clearAgentSubtitle();
     if (this.interactive) this.interactive.setError(message);
     else (this.view as DisplayView).setError(message);
   }
@@ -438,6 +447,7 @@ class ThinVoiceLiveClient {
     this.gatedHoldIntent = undefined;
     this.interactive?.setReady(false);
     this.interactive?.setHoldActive(false);
+    if (isSubtitleView(this.view)) this.view.clearAgentSubtitle();
 
     const cleanup = (async () => {
       if (this.pingId) {

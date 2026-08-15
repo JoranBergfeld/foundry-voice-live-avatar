@@ -79,6 +79,100 @@ test("display exposes subtitles without enabling microphone controls", async ({ 
   expect((await inspectLifecycle(page)).getUserMediaCalls).toBe(0);
 });
 
+test("landing renders live agent subtitles through hold and fade", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/");
+  await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
+  await page.getByRole("button", { name: "Subtitles" }).click();
+  const subtitle = page.locator(".live-subtitle");
+
+  await sendServerFrame(page, { t: "agent-transcript", text: "Hel", final: false });
+  await sendServerFrame(page, { t: "agent-transcript", text: "lo", final: false });
+  await expect(subtitle).toHaveText("Hello");
+  await expect(subtitle).toBeVisible();
+
+  await sendServerFrame(page, { t: "agent-transcript", text: "Hello there", final: true });
+  await expect(subtitle).toHaveText("Hello there");
+  await page.clock.pauseAt(Date.now());
+  await sendServerFrame(page, { t: "response-done" });
+
+  await page.clock.fastForward(2_999);
+  expect(await subtitle.evaluate((element) => ({
+    fading: element.classList.contains("fading"),
+    hidden: (element as HTMLElement).hidden,
+  }))).toEqual({ fading: false, hidden: false });
+
+  await page.clock.fastForward(1);
+  expect(await subtitle.evaluate((element) => ({
+    fading: element.classList.contains("fading"),
+    hidden: (element as HTMLElement).hidden,
+  }))).toEqual({ fading: true, hidden: false });
+
+  await page.clock.fastForward(300);
+  await expect(subtitle).toBeHidden();
+  await expect(subtitle).toHaveText("");
+});
+
+test("new agent text cancels the pending subtitle fade and disabling hides immediately", async ({ page }) => {
+  await page.clock.install();
+  await page.goto("/");
+  await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
+  const toggle = page.getByRole("button", { name: "Subtitles" });
+  const subtitle = page.locator(".live-subtitle");
+  await toggle.click();
+
+  await sendServerFrame(page, { t: "agent-transcript", text: "First", final: true });
+  await sendServerFrame(page, { t: "response-done" });
+  await page.clock.fastForward(1_000);
+  await sendServerFrame(page, { t: "agent-transcript", text: "Second", final: false });
+
+  await expect(subtitle).toHaveText("Second");
+  await page.clock.fastForward(2_300);
+  await expect(subtitle).toBeVisible();
+  await expect(subtitle).not.toHaveClass(/fading/);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(subtitle).toBeHidden();
+  await expect(subtitle).toHaveText("");
+});
+
+test("display receives agent subtitles across a clean reconnect without microphone access", async ({ page }) => {
+  await openDisplay(page);
+  const toggle = page.getByRole("button", { name: "Subtitles" });
+  const subtitle = page.locator(".live-subtitle");
+  await toggle.click();
+
+  await sendServerFrame(page, { t: "agent-transcript", text: "Before disconnect", final: true });
+  await expect(subtitle).toHaveText("Before disconnect");
+  await expect(subtitle).toBeVisible();
+
+  await closeLatestSocketCleanly(page);
+  await expect(subtitle).toBeHidden();
+  await expect(subtitle).toHaveText("");
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Reconnect" }).click();
+  await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(2);
+  await sendServerFrame(page, { t: "agent-transcript", text: "Fresh subtitle", final: false });
+  await expect(subtitle).toHaveText("Fresh subtitle");
+  await expect(subtitle).toBeVisible();
+  expect((await inspectLifecycle(page)).getUserMediaCalls).toBe(0);
+});
+
+test("landing subtitle routing preserves transcript history", async ({ page }) => {
+  await page.goto("/");
+  await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
+  await page.getByRole("button", { name: "Subtitles" }).click();
+
+  await sendServerFrame(page, { t: "agent-transcript", text: "Shared transcript", final: true });
+  await expect(page.locator(".live-subtitle")).toHaveText("Shared transcript");
+
+  await page.getByRole("button", { name: "Transcript" }).click();
+  await expect(page.locator(".landing-transcript")).toHaveClass(/open/);
+  await expect(page.locator(".landing-transcript-list")).toContainText("Agent: Shared transcript");
+});
+
 for (const view of ["landing", "display"] as const) {
   test(`${view} clears subtitle presentation on errors without disabling subtitles`, async ({ page }) => {
     if (view === "display") await openDisplay(page);
