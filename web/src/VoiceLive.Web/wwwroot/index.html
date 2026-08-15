@@ -154,6 +154,56 @@
         margin-top: 0.75rem;
       }
 
+      .subtitle-toggle {
+        background: rgb(0 0 0 / 82%);
+        border: 1px solid rgb(255 255 255 / 80%);
+        border-radius: 999px;
+        box-shadow: 0 0.15rem 0.5rem rgb(0 0 0 / 35%);
+        color: #fff;
+        font-weight: 600;
+        padding: 0.4rem 0.85rem;
+      }
+
+      .subtitle-toggle[aria-pressed="true"] {
+        background: #2563eb;
+      }
+
+      .display-subtitle-toggle {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 3;
+      }
+
+      .live-subtitle {
+        position: fixed;
+        left: 50%;
+        bottom: 2rem;
+        z-index: 3;
+        transform: translateX(-50%);
+        max-width: min(52rem, calc(100vw - 2rem));
+        background: rgb(0 0 0 / 86%);
+        border: 1px solid rgb(255 255 255 / 35%);
+        border-radius: 0.75rem;
+        box-shadow: 0 0.3rem 1rem rgb(0 0 0 / 45%);
+        color: #fff;
+        font-size: clamp(1.1rem, 2.5vw, 2rem);
+        line-height: 1.35;
+        padding: 0.65rem 1rem;
+        text-align: center;
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity 300ms ease;
+      }
+
+      .live-subtitle.fading {
+        opacity: 0;
+      }
+
+      .live-subtitle[hidden] {
+        display: none;
+      }
+
       body.landing-view {
         background: #000;
       }
@@ -217,6 +267,23 @@
         background: #f0f2f8;
       }
 
+      .landing-action.subtitle-toggle {
+        background: rgb(0 0 0 / 82%);
+        border-color: rgb(255 255 255 / 80%);
+        color: #fff;
+      }
+
+      .landing-action.subtitle-toggle:hover,
+      .landing-action.subtitle-toggle:focus-visible {
+        background: #1f2937;
+      }
+
+      .landing-action.subtitle-toggle[aria-pressed="true"],
+      .landing-action.subtitle-toggle[aria-pressed="true"]:hover,
+      .landing-action.subtitle-toggle[aria-pressed="true"]:focus-visible {
+        background: #2563eb;
+      }
+
       .landing-talk {
         position: fixed;
         bottom: 1.5rem;
@@ -230,6 +297,10 @@
 
       .landing-talk.muted {
         background: #6b7280;
+      }
+
+      .landing-subtitle {
+        bottom: 6rem;
       }
 
       .landing-reconnect {
@@ -349,6 +420,7 @@
           top: 0.6rem;
           right: 0.6rem;
           gap: 0.35rem;
+          max-width: calc(100vw - 1.2rem);
         }
 
         .landing-action {

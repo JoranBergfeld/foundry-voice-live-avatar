@@ -42,6 +42,23 @@ async function readyDisplay(page: Parameters<typeof installBrowserMocks>[0]) {
   await expect(page.getByText("webrtc: offer sent; waiting for answer")).toBeVisible();
 }
 
+test("landing subtitles are disabled and hidden by default", async ({ page }) => {
+  await page.goto("/");
+  const toggle = page.getByRole("button", { name: "Subtitles" });
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".live-subtitle")).toBeHidden();
+});
+
+test("display exposes subtitles without enabling microphone controls", async ({ page }) => {
+  await openDisplay(page);
+  const toggle = page.getByRole("button", { name: "Subtitles" });
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".live-subtitle")).toBeHidden();
+  expect((await inspectLifecycle(page)).getUserMediaCalls).toBe(0);
+});
+
 test("display reconnects with fresh resources after clean socket closure", async ({ page }) => {
   await openDisplay(page);
   await readyDisplay(page);

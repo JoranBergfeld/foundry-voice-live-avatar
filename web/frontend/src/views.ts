@@ -31,6 +31,12 @@ export type InteractiveView = {
   noteTool?(text: string): void;
 };
 
+export type SubtitleView = {
+  setAgentSubtitle(text: string, final: boolean): void;
+  completeAgentSubtitle(): void;
+  clearAgentSubtitle(): void;
+};
+
 export type OperatorView = InteractiveView & {
   stopButton: HTMLButtonElement;
   repeatButton: HTMLButtonElement;
@@ -38,12 +44,12 @@ export type OperatorView = InteractiveView & {
   noteTool(text: string): void;
 };
 
-export type LandingView = InteractiveView & {
+export type LandingView = InteractiveView & SubtitleView & {
   supportsMuteToggle: true;
   setMuted(muted: boolean): void;
 };
 
-export type DisplayView = {
+export type DisplayView = SubtitleView & {
   root: HTMLElement;
   avatar: HTMLVideoElement;
   setStatus(message: string): void;
@@ -71,6 +77,65 @@ function statusLine(label: string): HTMLParagraphElement {
 
 function setText(element: HTMLElement, value: string) {
   element.textContent = value;
+}
+
+function createSubtitleController(toggle: HTMLButtonElement, overlay: HTMLElement): SubtitleView {
+  let enabled = false;
+  let liveText = "";
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  let fadeClearTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const cancelTimers = () => {
+    if (holdTimer !== undefined) clearTimeout(holdTimer);
+    if (fadeClearTimer !== undefined) clearTimeout(fadeClearTimer);
+    holdTimer = undefined;
+    fadeClearTimer = undefined;
+  };
+
+  const clearPresentation = () => {
+    liveText = "";
+    overlay.textContent = "";
+    overlay.classList.remove("fading");
+    overlay.hidden = true;
+  };
+
+  toggle.setAttribute("aria-pressed", "false");
+  toggle.onclick = () => {
+    enabled = !enabled;
+    toggle.setAttribute("aria-pressed", String(enabled));
+    if (!enabled) {
+      cancelTimers();
+      clearPresentation();
+    }
+  };
+
+  return {
+    setAgentSubtitle(text, final) {
+      if (!enabled || !text) return;
+      cancelTimers();
+      overlay.classList.remove("fading");
+      liveText = final ? text : liveText + text;
+      overlay.textContent = liveText;
+      overlay.hidden = false;
+    },
+    completeAgentSubtitle() {
+      liveText = "";
+      cancelTimers();
+      if (!enabled || overlay.hidden) return;
+      holdTimer = setTimeout(() => {
+        holdTimer = undefined;
+        overlay.classList.add("fading");
+        fadeClearTimer = setTimeout(() => {
+          fadeClearTimer = undefined;
+          clearPresentation();
+        }, 300);
+      }, 3000);
+    },
+    clearAgentSubtitle() {
+      cancelTimers();
+      clearPresentation();
+    },
+  };
 }
 
 function createTranscriptAppender(list: HTMLElement) {
@@ -289,6 +354,17 @@ export function renderLandingView(root: HTMLElement): LandingView {
   transcriptToggle.setAttribute("aria-label", "Transcript");
   transcriptToggle.title = "Transcript";
 
+  const subtitleToggle = document.createElement("button");
+  subtitleToggle.type = "button";
+  subtitleToggle.className = "landing-action subtitle-toggle";
+  subtitleToggle.textContent = "Subtitles";
+  subtitleToggle.setAttribute("aria-label", "Subtitles");
+
+  const subtitleOverlay = document.createElement("div");
+  subtitleOverlay.className = "live-subtitle landing-subtitle";
+  subtitleOverlay.hidden = true;
+  subtitleOverlay.setAttribute("role", "status");
+
   const panel = document.createElement("aside");
   panel.className = "landing-transcript";
   const panelHeader = document.createElement("header");
@@ -324,12 +400,14 @@ export function renderLandingView(root: HTMLElement): LandingView {
   reconnectButton.textContent = "Reconnect";
   reconnectButton.hidden = true;
 
-  actions.append(gear, transcriptToggle);
-  root.append(avatar, pill, actions, holdButton, panel, notice, errorOverlay, reconnectButton);
+  actions.append(gear, transcriptToggle, subtitleToggle);
+  root.append(avatar, pill, actions, holdButton, panel, notice, errorOverlay, reconnectButton, subtitleOverlay);
 
   const addTranscript = createTranscriptAppender(transcriptList);
+  const subtitles = createSubtitleController(subtitleToggle, subtitleOverlay);
 
   return {
+    ...subtitles,
     root,
     avatar,
     holdButton,
@@ -405,10 +483,24 @@ export function renderDisplayView(root: HTMLElement): DisplayView {
   reconnectButton.textContent = "Reconnect";
   reconnectButton.hidden = true;
 
+  const subtitleToggle = document.createElement("button");
+  subtitleToggle.type = "button";
+  subtitleToggle.className = "subtitle-toggle display-subtitle-toggle";
+  subtitleToggle.textContent = "Subtitles";
+  subtitleToggle.setAttribute("aria-label", "Subtitles");
+
+  const subtitleOverlay = document.createElement("div");
+  subtitleOverlay.className = "live-subtitle display-subtitle";
+  subtitleOverlay.hidden = true;
+  subtitleOverlay.setAttribute("role", "status");
+
   overlay.append(message, reconnectButton);
-  root.append(video, overlay);
+  root.append(video, overlay, subtitleToggle, subtitleOverlay);
+
+  const subtitles = createSubtitleController(subtitleToggle, subtitleOverlay);
 
   return {
+    ...subtitles,
     root,
     avatar: video,
     setStatus(value) {
