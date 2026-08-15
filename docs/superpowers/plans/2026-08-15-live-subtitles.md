@@ -511,7 +511,7 @@ git --no-pager status --short
 
 Expected: no whitespace errors and no new `app.js` diff, because Tasks 1 and 2 committed the generated bundle after their source changes.
 
-- [ ] **Step 5: Commit documentation and generated bundle**
+- [ ] **Step 5: Commit documentation**
 
 ```bash
 git add README.md web/README.md
@@ -529,4 +529,4 @@ git --no-pager status --short &&
 git --no-pager log --oneline "$(git merge-base main HEAD)"..HEAD
 ```
 
-Expected: the worktree is clean and the log shows the complete feature-only implementation, review-fix, generated-bundle, and documentation commit sequence after the branch point with `main`. The design and plan commits form the baseline on `main`, so they are not repeated in this range.
+Expected: the worktree is clean and the log lists the feature-branch implementation, review-fix, and documentation commits after the branch point with `main`. Bundle synchronization was verified by Step 4's no-diff check and the prior task commits. The design and plan commits form the baseline on `main`, so they are not repeated in this range.
