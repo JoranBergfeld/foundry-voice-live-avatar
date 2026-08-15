@@ -529,4 +529,4 @@ git --no-pager status --short &&
 git --no-pager log -4 --oneline
 ```
 
-Expected: the worktree is clean and the subtitle implementation is represented by the design commit plus the three implementation commits.
+Expected: the worktree is clean and the design, plan, implementation, review fixes, generated bundle, and documentation are committed.

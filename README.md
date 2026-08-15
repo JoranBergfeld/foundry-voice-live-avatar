@@ -6,9 +6,9 @@ A stage-ready conversational avatar built on [Microsoft Foundry Voice Live](http
 
 | URL | Purpose |
 |-----|---------|
-| `/` | Fullscreen avatar landing — audience/presenter display |
+| `/` | Fullscreen avatar landing with optional local live subtitles |
 | `/?view=operator` | Operator console — session controls, transcript, tool events, diagnostics |
-| `/?view=display` | Dedicated display surface for secondary screens |
+| `/?view=display` | Dedicated passive display with optional local live subtitles |
 
 By default the app runs in **model mode** using `gpt-realtime`. Optional **agent mode** uses a named Voice Live agent created in the Azure AI Foundry portal. Reliability features include manual turn gating (`gated` — Hold to talk — plus `open-mic` and `hybrid`), an operator-initiated **Reconnect** control on every view, health and error reporting at `/api/health`, and safe-question injection.
 
@@ -340,6 +340,7 @@ Inbound browser frames are capped at 1 MiB. Outbound sends are serialized. Activ
 - **Audio worklet** — `web/src/VoiceLive.Web/wwwroot/pcm-worklet.js` captures mono microphone input, converts to PCM16, and sends binary frames over the WebSocket.
 - **Turn-taking** — gated mode sends `start-turn`/`end-turn` on button press/release; open-mic mode streams continuously; hybrid uses VAD.
 - **Transcripts and tools** — displayed in the operator view; tool call events from the bridge are shown as structured notifications.
+- **Live subtitles** — landing and display can show agent spoken-audio transcript events in a disabled-by-default local overlay. Each page controls its own toggle and clears the presentation on disconnect; the operator view has no subtitle overlay.
 - **Error and reconnect** — reconnection is **operator-initiated, not automatic**. On disconnect every view reveals a **Reconnect** button; there is no retry timer and no backoff. Fatal errors surface as an error banner; non-fatal avatar errors surface as a separate notice — avatar video **and audio** are lost (both ride the same WebRTC peer connection), and the WebSocket, microphone capture, and transcripts survive but there is no audible output to the room. An unattended `?view=display` screen will therefore stay disconnected until someone clicks Reconnect — staff accordingly.
 - **Resource teardown** — microphone tracks, AudioContext, WebSocket, and RTCPeerConnection are all closed on session end.
 
