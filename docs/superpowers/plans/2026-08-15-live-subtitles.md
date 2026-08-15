@@ -4,7 +4,7 @@
 
 **Goal:** Add disabled-by-default, agent-only live subtitles with local toggles on the landing and display views.
 
-**Architecture:** Reuse the existing `agent-transcript` and `response-done` WebSocket frames. Landing and display views implement a focused subtitle capability that owns toggle state, live text accumulation, fade timers, and teardown; `ThinVoiceLiveClient` routes transcript lifecycle events through a type guard without changing the backend or wire protocol.
+**Architecture:** Reuse the existing `agent-transcript` and `response-done` WebSocket frames. `VoiceLiveUpdateHandler` keeps the frame shape unchanged but narrows `agent-transcript` emission to `response.audio_transcript.delta`/`done`, excluding parallel `response.text.delta` updates. Landing and display views implement a focused subtitle capability that owns toggle state, live text accumulation, fade timers, and teardown; `ThinVoiceLiveClient` routes transcript lifecycle events through a type guard without changing the browser-side frame contract.
 
 **Tech Stack:** TypeScript, browser DOM APIs, CSS, Playwright, esbuild
 

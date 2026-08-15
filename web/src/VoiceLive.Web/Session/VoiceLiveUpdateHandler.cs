@@ -59,8 +59,9 @@ internal sealed class VoiceLiveUpdateHandler(
             case SessionUpdateResponseAudioTranscriptDone transcriptDone:
                 await transport.SendJsonAsync(new { t = "agent-transcript", text = transcriptDone.Transcript, final = true }, ct);
                 break;
-            case SessionUpdateResponseTextDelta text:
-                await transport.SendJsonAsync(new { t = "agent-transcript", text = text.Delta, final = false }, ct);
+            case SessionUpdateResponseTextDelta:
+                // Model mode can emit parallel text deltas alongside spoken audio transcripts.
+                // Browser subtitles must track the spoken audio transcript only.
                 break;
             case SessionUpdateResponseDone:
                 await transport.SendJsonAsync(new { t = "response-done" }, ct);

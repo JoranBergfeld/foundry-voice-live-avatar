@@ -288,7 +288,7 @@ function renderLandingView(root) {
   const subtitleOverlay = document.createElement("div");
   subtitleOverlay.className = "live-subtitle landing-subtitle";
   subtitleOverlay.hidden = true;
-  subtitleOverlay.setAttribute("role", "status");
+  subtitleOverlay.setAttribute("aria-hidden", "true");
   const panel = document.createElement("aside");
   panel.className = "landing-transcript";
   const panelHeader = document.createElement("header");
@@ -401,7 +401,7 @@ function renderDisplayView(root) {
   const subtitleOverlay = document.createElement("div");
   subtitleOverlay.className = "live-subtitle display-subtitle";
   subtitleOverlay.hidden = true;
-  subtitleOverlay.setAttribute("role", "status");
+  subtitleOverlay.setAttribute("aria-hidden", "true");
   overlay.append(message, reconnectButton);
   root.append(video, overlay, subtitleToggle, subtitleOverlay);
   const subtitles = createSubtitleController(subtitleToggle, subtitleOverlay);

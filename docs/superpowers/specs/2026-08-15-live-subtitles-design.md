@@ -22,9 +22,13 @@ The existing operator and landing transcript history remains unchanged.
 ## Architecture
 
 The browser already receives `agent-transcript` frames containing live deltas
-and final transcript text. `ThinVoiceLiveClient` will continue routing those
-frames to transcript history where the view supports it and will additionally
-route agent text to a dedicated subtitle presentation API.
+and final transcript text for the avatar's spoken audio transcript.
+`VoiceLiveUpdateHandler` remains the canonical source for those frames, but it
+must filter out parallel `response.text.delta` updates so only
+`response.audio_transcript.delta`/`done` reach the browser. `ThinVoiceLiveClient`
+will continue routing `agent-transcript` frames to transcript history where the
+view supports it and will additionally route agent text to a dedicated subtitle
+presentation API.
 
 The landing and display views will each own:
 
@@ -33,8 +37,9 @@ The landing and display views will each own:
 - The enabled state and subtitle lifecycle timers.
 
 This separation keeps subtitle presentation independent from transcript history.
-No changes are required to Azure session options, server-side update handling,
-or the WebSocket wire protocol.
+No changes are required to Azure session options or the WebSocket frame shape.
+Server update handling narrows the existing `agent-transcript` source to spoken
+audio-transcript updates only.
 
 ## User Experience
 

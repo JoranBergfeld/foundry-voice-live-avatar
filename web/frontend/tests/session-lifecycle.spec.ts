@@ -61,12 +61,19 @@ async function expectSubtitlePresentationCleared(page: Parameters<typeof install
   await expect(page.getByRole("button", { name: "Subtitles" })).toHaveAttribute("aria-pressed", "true");
 }
 
+async function expectSubtitleOverlayHiddenFromAssistiveTech(page: Parameters<typeof installBrowserMocks>[0]) {
+  const subtitle = page.locator(".live-subtitle");
+  await expect(subtitle).toHaveAttribute("aria-hidden", "true");
+  await expect(subtitle).not.toHaveAttribute("role", "status");
+}
+
 test("landing subtitles are disabled and hidden by default", async ({ page }) => {
   await page.goto("/");
   const toggle = page.getByRole("button", { name: "Subtitles" });
   await expect(toggle).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator(".live-subtitle")).toBeHidden();
+  await expectSubtitleOverlayHiddenFromAssistiveTech(page);
 });
 
 test("display exposes subtitles without enabling microphone controls", async ({ page }) => {
@@ -76,6 +83,7 @@ test("display exposes subtitles without enabling microphone controls", async ({ 
   await expect(toggle).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator(".live-subtitle")).toBeHidden();
+  await expectSubtitleOverlayHiddenFromAssistiveTech(page);
   expect((await inspectLifecycle(page)).getUserMediaCalls).toBe(0);
 });
 

@@ -132,6 +132,72 @@ public class BridgeCollaboratorTests
         Assert.Empty(socket.SentTexts);
     }
 
+    [Fact]
+    public async Task Response_audio_transcript_delta_forwards_agent_transcript_frame()
+    {
+        var config = AppConfigLoader.Load(
+            TestAppFactory.RepoConfigDir,
+            new VoiceLiveOptions { Endpoint = "https://x", Mode = "model", ApiVersion = "2025-10-01" }).Server;
+        var socket = TestWebSocket.TextFragments();
+        using var transport = new WebSocketTransport(socket);
+        using var meter = new Meter("VoiceLive.Web.Tests");
+        var handler = new VoiceLiveUpdateHandler(
+            config,
+            transport,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+            meter.CreateCounter<long>("errors"));
+
+        Assert.True(await handler.HandleAsync(CreateResponseAudioTranscriptDelta("Hel"), CancellationToken.None));
+
+        using var frame = JsonDocument.Parse(Assert.Single(socket.SentTexts));
+        Assert.Equal("agent-transcript", frame.RootElement.GetProperty("t").GetString());
+        Assert.Equal("Hel", frame.RootElement.GetProperty("text").GetString());
+        Assert.False(frame.RootElement.GetProperty("final").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Response_audio_transcript_done_forwards_final_agent_transcript_frame()
+    {
+        var config = AppConfigLoader.Load(
+            TestAppFactory.RepoConfigDir,
+            new VoiceLiveOptions { Endpoint = "https://x", Mode = "model", ApiVersion = "2025-10-01" }).Server;
+        var socket = TestWebSocket.TextFragments();
+        using var transport = new WebSocketTransport(socket);
+        using var meter = new Meter("VoiceLive.Web.Tests");
+        var handler = new VoiceLiveUpdateHandler(
+            config,
+            transport,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+            meter.CreateCounter<long>("errors"));
+
+        Assert.True(await handler.HandleAsync(CreateResponseAudioTranscriptDone("Hello there"), CancellationToken.None));
+
+        using var frame = JsonDocument.Parse(Assert.Single(socket.SentTexts));
+        Assert.Equal("agent-transcript", frame.RootElement.GetProperty("t").GetString());
+        Assert.Equal("Hello there", frame.RootElement.GetProperty("text").GetString());
+        Assert.True(frame.RootElement.GetProperty("final").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Response_text_delta_does_not_forward_agent_transcript_frame()
+    {
+        var config = AppConfigLoader.Load(
+            TestAppFactory.RepoConfigDir,
+            new VoiceLiveOptions { Endpoint = "https://x", Mode = "model", ApiVersion = "2025-10-01" }).Server;
+        var socket = TestWebSocket.TextFragments();
+        using var transport = new WebSocketTransport(socket);
+        using var meter = new Meter("VoiceLive.Web.Tests");
+        var handler = new VoiceLiveUpdateHandler(
+            config,
+            transport,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+            meter.CreateCounter<long>("errors"));
+
+        Assert.True(await handler.HandleAsync(CreateResponseTextDelta("Typed-only"), CancellationToken.None));
+
+        Assert.Empty(socket.SentTexts);
+    }
+
     private static SessionUpdateSessionCreated CreateSessionCreated()
     {
         return ModelReaderWriter.Read<SessionUpdateSessionCreated>(BinaryData.FromString(SessionEventJson("session.created")))
@@ -142,6 +208,27 @@ public class BridgeCollaboratorTests
     {
         return ModelReaderWriter.Read<SessionUpdateSessionUpdated>(BinaryData.FromString(SessionEventJson("session.updated", avatarStyle)))
             ?? throw new InvalidOperationException("Could not deserialize test session.updated event.");
+    }
+
+    private static SessionUpdateResponseAudioTranscriptDelta CreateResponseAudioTranscriptDelta(string delta)
+    {
+        return ModelReaderWriter.Read<SessionUpdateResponseAudioTranscriptDelta>(
+            BinaryData.FromString(ResponseEventJson("response.audio_transcript.delta", "delta", delta)))
+            ?? throw new InvalidOperationException("Could not deserialize test response.audio_transcript.delta event.");
+    }
+
+    private static SessionUpdateResponseAudioTranscriptDone CreateResponseAudioTranscriptDone(string transcript)
+    {
+        return ModelReaderWriter.Read<SessionUpdateResponseAudioTranscriptDone>(
+            BinaryData.FromString(ResponseEventJson("response.audio_transcript.done", "transcript", transcript)))
+            ?? throw new InvalidOperationException("Could not deserialize test response.audio_transcript.done event.");
+    }
+
+    private static SessionUpdateResponseTextDelta CreateResponseTextDelta(string delta)
+    {
+        return ModelReaderWriter.Read<SessionUpdateResponseTextDelta>(
+            BinaryData.FromString(ResponseEventJson("response.text.delta", "delta", delta)))
+            ?? throw new InvalidOperationException("Could not deserialize test response.text.delta event.");
     }
 
     private static string SessionEventJson(string type, string? avatarStyle = "hosted-style") => $$"""
@@ -167,6 +254,20 @@ public class BridgeCollaboratorTests
               }
             }
             """;
+
+    private static string ResponseEventJson(string type, string valueProperty, string value)
+    {
+        return JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["type"] = type,
+            ["event_id"] = "evt-1",
+            ["response_id"] = "response-1",
+            ["item_id"] = "item-1",
+            ["output_index"] = 0,
+            ["content_index"] = 0,
+            [valueProperty] = value,
+        });
+    }
 
     private sealed class TestWebSocket : WebSocket
     {
