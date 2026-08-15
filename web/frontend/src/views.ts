@@ -428,6 +428,7 @@ export function renderLandingView(root: HTMLElement): LandingView {
       pill.textContent = value;
     },
     setError(message) {
+      subtitles.clearAgentSubtitle();
       errorOverlay.hidden = false;
       errorOverlay.textContent = message;
     },
@@ -442,6 +443,7 @@ export function renderLandingView(root: HTMLElement): LandingView {
       reconnectButton.onclick = handler;
     },
     setDisconnected(disconnected) {
+      if (disconnected) subtitles.clearAgentSubtitle();
       reconnectButton.hidden = !disconnected;
       holdButton.disabled = disconnected;
     },
@@ -509,6 +511,7 @@ export function renderDisplayView(root: HTMLElement): DisplayView {
       message.textContent = value;
     },
     setError(value) {
+      subtitles.clearAgentSubtitle();
       overlay.classList.add("error");
       overlay.setAttribute("role", "alert");
       message.textContent = value;
@@ -522,6 +525,7 @@ export function renderDisplayView(root: HTMLElement): DisplayView {
       reconnectButton.onclick = handler;
     },
     setDisconnected(disconnected) {
+      if (disconnected) subtitles.clearAgentSubtitle();
       reconnectButton.hidden = !disconnected;
     },
   };

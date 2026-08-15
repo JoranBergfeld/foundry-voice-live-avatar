@@ -341,6 +341,7 @@ function renderLandingView(root) {
       pill.textContent = value;
     },
     setError(message) {
+      subtitles.clearAgentSubtitle();
       errorOverlay.hidden = false;
       errorOverlay.textContent = message;
     },
@@ -355,6 +356,7 @@ function renderLandingView(root) {
       reconnectButton.onclick = handler;
     },
     setDisconnected(disconnected) {
+      if (disconnected) subtitles.clearAgentSubtitle();
       reconnectButton.hidden = !disconnected;
       holdButton.disabled = disconnected;
     },
@@ -413,6 +415,7 @@ function renderDisplayView(root) {
       message.textContent = value;
     },
     setError(value) {
+      subtitles.clearAgentSubtitle();
       overlay.classList.add("error");
       overlay.setAttribute("role", "alert");
       message.textContent = value;
@@ -426,6 +429,7 @@ function renderDisplayView(root) {
       reconnectButton.onclick = handler;
     },
     setDisconnected(disconnected) {
+      if (disconnected) subtitles.clearAgentSubtitle();
       reconnectButton.hidden = !disconnected;
     }
   };

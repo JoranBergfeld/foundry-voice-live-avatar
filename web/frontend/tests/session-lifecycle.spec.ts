@@ -42,6 +42,25 @@ async function readyDisplay(page: Parameters<typeof installBrowserMocks>[0]) {
   await expect(page.getByText("webrtc: offer sent; waiting for answer")).toBeVisible();
 }
 
+async function showSubtitlePresentation(page: Parameters<typeof installBrowserMocks>[0]) {
+  const toggle = page.getByRole("button", { name: "Subtitles" });
+  if (await toggle.getAttribute("aria-pressed") === "false") await toggle.click();
+  await page.locator(".live-subtitle").evaluate((element) => {
+    element.textContent = "Visible subtitle";
+    element.classList.add("fading");
+    (element as HTMLElement).hidden = false;
+  });
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".live-subtitle")).toBeVisible();
+}
+
+async function expectSubtitlePresentationCleared(page: Parameters<typeof installBrowserMocks>[0]) {
+  await expect(page.locator(".live-subtitle")).toBeHidden();
+  await expect(page.locator(".live-subtitle")).toHaveText("");
+  await expect(page.locator(".live-subtitle")).not.toHaveClass(/fading/);
+  await expect(page.getByRole("button", { name: "Subtitles" })).toHaveAttribute("aria-pressed", "true");
+}
+
 test("landing subtitles are disabled and hidden by default", async ({ page }) => {
   await page.goto("/");
   const toggle = page.getByRole("button", { name: "Subtitles" });
@@ -52,12 +71,45 @@ test("landing subtitles are disabled and hidden by default", async ({ page }) =>
 
 test("display exposes subtitles without enabling microphone controls", async ({ page }) => {
   await openDisplay(page);
+  await readyDisplay(page);
   const toggle = page.getByRole("button", { name: "Subtitles" });
   await expect(toggle).toBeVisible();
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator(".live-subtitle")).toBeHidden();
   expect((await inspectLifecycle(page)).getUserMediaCalls).toBe(0);
 });
+
+for (const view of ["landing", "display"] as const) {
+  test(`${view} clears subtitle presentation on errors without disabling subtitles`, async ({ page }) => {
+    if (view === "display") await openDisplay(page);
+    else await page.goto("/");
+    await showSubtitlePresentation(page);
+
+    await sendServerFrame(page, { t: "error", message: "Test error" });
+
+    await expect(page.getByRole("alert")).toContainText("Server error: Test error");
+    await expectSubtitlePresentationCleared(page);
+  });
+
+  test(`${view} clears subtitles on disconnect but not reconnect`, async ({ page }) => {
+    if (view === "display") await openDisplay(page);
+    else await page.goto("/");
+    await showSubtitlePresentation(page);
+
+    await closeLatestSocketCleanly(page);
+
+    await expect(page.getByRole("button", { name: "Reconnect" })).toBeVisible();
+    await expectSubtitlePresentationCleared(page);
+
+    await showSubtitlePresentation(page);
+    await page.getByRole("button", { name: "Reconnect" }).click();
+
+    await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(2);
+    await expect(page.locator(".live-subtitle")).toHaveText("Visible subtitle");
+    await expect(page.locator(".live-subtitle")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Subtitles" })).toHaveAttribute("aria-pressed", "true");
+  });
+}
 
 test("display reconnects with fresh resources after clean socket closure", async ({ page }) => {
   await openDisplay(page);
