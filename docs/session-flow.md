@@ -75,11 +75,11 @@ All three are the same app shell, selected by query string, and **each open tab 
 
 | View | URL | Microphone | Controls | Intended screen |
 |---|---|---|---|---|
-| Landing | `/` | Yes | Hold to talk (gated mode only); mute toggle (non-gated modes only, same button); Reconnect (on disconnect); the ⚙ gear is the only route to the operator view | Setup and testing |
-| Operator | `/?view=operator` | Yes | Hold to talk (gated only), safe questions, barge-in, all six status channels, Reconnect. **No mute control** (`controls.append` in `views.ts:148` is `holdButton, stopButton, repeatButton, safeQuestionPanel`). | The operator's laptop, never visible to the audience |
-| Display | `/?view=display` | **No** | Avatar video only; Reconnect appears on disconnect | The stage screen |
+| Landing | `/` | Yes | Avatar; local **Subtitles** toggle and overlay (off by default); Config and Transcript controls; Hold to talk (gated mode only) or mute toggle (non-gated modes only, same button); Reconnect (on disconnect) | Setup and testing |
+| Operator | `/?view=operator` | Yes | Hold to talk (gated only), safe questions, barge-in, all six status channels, Reconnect. **No mute control or subtitle overlay** (`controls.append` in `views.ts:148` is `holdButton, stopButton, repeatButton, safeQuestionPanel`). | The operator's laptop, never visible to the audience |
+| Display | `/?view=display` | **No** | Avatar; local **Subtitles** toggle and overlay (off by default); Reconnect (on disconnect). No microphone or turn controls. | The stage screen |
 
 **Two consequences worth planning for:**
 
-- The display view has no microphone and no interaction affordance, yet a browser will still block autoplay until the page receives a user gesture. The app calls `play()` on an unmuted element; a `NotAllowedError` from the browser tears down the whole Voice Live session (not just the video) and shows a fatal error banner. **Always click into the display screen once before the audience arrives.** Recovery: click **Reconnect** (the click satisfies the gesture requirement and restarts the session); reload only if Reconnect still fails. See [runbook.md](runbook.md) §7.
+- The display view has no microphone or turn controls, yet a browser will still block autoplay until the page receives a user gesture. The app calls `play()` on an unmuted element; a `NotAllowedError` from the browser tears down the whole Voice Live session (not just the video) and shows a fatal error banner. **Always click into the display screen once before the audience arrives.** Recovery: click **Reconnect** (the click satisfies the gesture requirement and restarts the session); reload only if Reconnect still fails. See [runbook.md](runbook.md) §7.
 - Reconnection is operator-initiated; there is no automatic reconnect. An unattended display screen that disconnects stays disconnected until someone clicks Reconnect.

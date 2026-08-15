@@ -57,9 +57,11 @@ ConfigDir=$(pwd)/config ASPNETCORE_URLS=http://127.0.0.1:5210 dotnet run --no-la
 
 Run this from the repository root. `$(pwd)/config` makes the path absolute and explicit. `dotnet run` sets the app's working directory to the **project** directory (`web/src/VoiceLive.Web`), not the invocation directory, so a relative path such as `./config` resolves under the project directory and will not find the config files. Use `$(pwd)/config` (absolute, from the repo root) or `../../../config` (relative to the project directory) instead.
 
-Open `http://127.0.0.1:5210/` (fullscreen landing) or `http://127.0.0.1:5210/?view=operator` (operator console), sign in, grant microphone permission, then hold **Hold to talk**. Expect avatar video, spoken answer audio, and live/final transcripts. Open `http://127.0.0.1:5210/?view=display` for the passive fullscreen avatar-only view (no microphone).
+Open `http://127.0.0.1:5210/` (fullscreen landing) or `http://127.0.0.1:5210/?view=operator` (operator console), sign in, grant microphone permission, then hold **Hold to talk**. Expect avatar video, spoken answer audio, and live/final transcripts. The landing view also has a local **Subtitles** toggle, disabled by default, that overlays agent spoken transcript events.
 
-MVP limitation: every browser tab opens its own `/ws/session`, which creates its own server-side Voice Live session. The display tab therefore runs an independent session whose avatar does **not** mirror the operator's conversation and produces **no** audio — room audio must come from the operator machine. The operator tab is the complete self-contained experience; a shared operator/display room with one conversation across two screens is future work.
+Open `http://127.0.0.1:5210/?view=display` for the passive fullscreen display. It has avatar media and its own local, disabled-by-default **Subtitles** toggle for agent spoken transcript events, but no microphone or turn controls.
+
+MVP limitation: every browser tab opens its own `/ws/session`, which creates an independent server-side Voice Live session. Subtitle state and transcript events are local to that tab; the app does not provide one conversation shared across operator and display screens.
 
 ## Security
 
