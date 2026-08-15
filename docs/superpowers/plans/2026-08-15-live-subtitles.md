@@ -526,7 +526,7 @@ Run:
 
 ```bash
 git --no-pager status --short &&
-git --no-pager log -4 --oneline
+git --no-pager log --oneline "$(git merge-base main HEAD)"..HEAD
 ```
 
-Expected: the worktree is clean and the design, plan, implementation, review fixes, generated bundle, and documentation are committed.
+Expected: the worktree is clean and the log shows the complete feature-only implementation, review-fix, generated-bundle, and documentation commit sequence after the branch point with `main`. The design and plan commits form the baseline on `main`, so they are not repeated in this range.
