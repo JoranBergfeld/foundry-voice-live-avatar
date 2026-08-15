@@ -159,7 +159,7 @@ subtitleToggle.setAttribute("aria-label", "Subtitles");
 const subtitleOverlay = document.createElement("div");
 subtitleOverlay.className = "live-subtitle landing-subtitle";
 subtitleOverlay.hidden = true;
-subtitleOverlay.setAttribute("role", "status");
+subtitleOverlay.setAttribute("aria-hidden", "true");
 
 actions.append(gear, transcriptToggle, subtitleToggle);
 root.append(avatar, pill, actions, holdButton, panel, subtitleOverlay, notice, errorOverlay, reconnectButton);
@@ -187,7 +187,7 @@ subtitleToggle.setAttribute("aria-label", "Subtitles");
 const subtitleOverlay = document.createElement("div");
 subtitleOverlay.className = "live-subtitle display-subtitle";
 subtitleOverlay.hidden = true;
-subtitleOverlay.setAttribute("role", "status");
+subtitleOverlay.setAttribute("aria-hidden", "true");
 
 const subtitleController = createSubtitleController(subtitleToggle, subtitleOverlay);
 
