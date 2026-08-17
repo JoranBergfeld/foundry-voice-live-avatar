@@ -138,7 +138,7 @@ To enable agent mode:
 3. Run `azd env set VOICELIVE_MODE agent`.
 4. Run `azd up` again.
 
-The postprovision hook detects and lists existing agents and prints these opt-in steps. It does not create or modify agents. In agent mode the agent owns the model, instructions, and hosted tools; voice, avatar, audio, and turn-taking still come from app config.
+The postprovision hook detects and lists existing agents and prints these opt-in steps. It does not create or modify agents. In agent mode the web app sends no local Voice Live session update. Configure the model, instructions, tools, voice, avatar, audio, transcription, and turn-taking on the hosted agent; this keeps local and deployed web app instances from overriding the agent with different repository configuration. The hosted input format must remain compatible with the browser's fixed 24 kHz mono PCM16 transport.
 
 ## 9. Failure handling
 

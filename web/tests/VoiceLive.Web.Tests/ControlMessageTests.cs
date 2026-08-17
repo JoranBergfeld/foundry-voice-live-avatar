@@ -9,7 +9,7 @@ public class ControlMessageTests
     [InlineData("{\"x\":1}", true, null)]
     public void Parses_control_type(string json, bool ok, string? expected)
     {
-        var result = VoiceLiveWebSocketBridge.TryGetControlType(json, out var type);
+        var result = BrowserMessageHandler.TryGetControlType(json, out var type);
         Assert.Equal(ok, result);
         Assert.Equal(expected, type);
     }

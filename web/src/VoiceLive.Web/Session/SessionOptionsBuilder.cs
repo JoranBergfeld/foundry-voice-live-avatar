@@ -7,6 +7,9 @@ public static class SessionOptionsBuilder
 {
     public const int BrowserPcmSamplingRate = 24_000;
 
+    public static VoiceLiveSessionOptions? BuildForMode(ServerSessionConfig config, string instructions)
+        => config.Mode == SessionModeResolver.Agent ? null : Build(config, instructions);
+
     public static VoiceLiveSessionOptions Build(ServerSessionConfig config, string instructions)
     {
         var options = BuildCommon(config);
@@ -14,9 +17,6 @@ public static class SessionOptionsBuilder
         options.Instructions = instructions;
         return options;
     }
-
-    public static VoiceLiveSessionOptions BuildForAgent(ServerSessionConfig config)
-        => BuildCommon(config); // agent owns Model + Instructions
 
     private static VoiceLiveSessionOptions BuildCommon(ServerSessionConfig config)
     {

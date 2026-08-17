@@ -41,7 +41,9 @@ If session startup reports an Azure credential error, run `az login` or configur
 
 By default the web app runs in **model mode** using `VoiceLive:Mode=model` and the `gpt-realtime` model. Model mode works out-of-box with voice and avatar; no model deployment is required.
 
-To connect to a Voice Live agent instead, create the agent in the Azure AI Foundry portal, set its name and project in `config/agent.json`, and set `VoiceLive:Mode=agent` or `VOICELIVE_MODE=agent` before running/deploying. In agent mode the agent owns the model, instructions, and hosted tools; voice, avatar, audio, and turn-taking still come from app config.
+To connect to a Voice Live agent instead, create the agent in the Azure AI Foundry portal, set its name and project in `config/agent.json`, and set `VoiceLive:Mode=agent` or `VOICELIVE_MODE=agent` before running/deploying. In agent mode the web app sends no local Voice Live session update: the hosted agent owns the model, instructions, tools, voice, avatar, audio, transcription, and turn-taking. Configure those values on the agent so local and deployed app instances use the same source of truth. The agent's input format must remain compatible with the browser's fixed 24 kHz mono PCM16 transport.
+
+Browser-only concerns such as authentication, views, safe-question controls, WebSocket transport, and rendering the returned WebRTC media remain local to the web app.
 
 Tool/function/MCP events emitted by the agent are logged and shown under "Tool activity" in the operator view **when the session runs in agent mode** (the panel is hidden in model mode, where no tool calls occur). Note: purely hosted tools (e.g. web search, Azure AI Search) run entirely server-side and may not emit a discrete client event.
 

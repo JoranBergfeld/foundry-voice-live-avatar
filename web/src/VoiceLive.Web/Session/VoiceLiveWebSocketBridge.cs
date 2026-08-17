@@ -51,7 +51,6 @@ public sealed class VoiceLiveWebSocketBridge(
                     logger.LogInformation("Starting Voice Live session in AGENT mode ({Agent} / {Project})", config.Agent.AgentName, config.Agent.AgentProjectName);
                     var agent = new AgentSessionConfig(config.Agent.AgentName, config.Agent.AgentProjectName);
                     session = await client.StartSessionAsync(SessionTarget.FromAgent(agent), cts.Token);
-                    await session.ConfigureSessionAsync(SessionOptionsBuilder.BuildForAgent(config), cts.Token);
                 }
                 else
                 {

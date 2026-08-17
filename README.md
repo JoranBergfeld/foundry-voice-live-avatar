@@ -204,6 +204,8 @@ azd up
 
 The `postprovision` hook runs `scripts/setup-agent.sh` (or `.ps1`) which lists existing agents and prints the steps above. See [docs/runbook.md](docs/runbook.md) for environment variables, self-contained deployment, region availability, and day-two operations.
 
+Agent mode sends no local Voice Live session update. Configure the model, instructions, tools, voice, avatar, audio, and turn-taking on the hosted agent; the web app retains only browser and transport responsibilities.
+
 ## Session startup
 
 ```mermaid

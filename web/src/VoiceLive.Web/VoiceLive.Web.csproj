@@ -19,6 +19,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="VoiceLive.Web.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="..\..\..\config\**\*"
              Link="config\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
