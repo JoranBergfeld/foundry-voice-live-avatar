@@ -33,19 +33,90 @@ function statusLine(label) {
 function setText(element, value) {
   element.textContent = value;
 }
+function nextWordBoundary(text, from) {
+  let index = from;
+  while (index < text.length && text[index] === " ") index += 1;
+  while (index < text.length && text[index] !== " ") index += 1;
+  return index;
+}
+function revealDelayForWord(wordLength) {
+  return Math.min(REVEAL_MAX_MS, Math.max(REVEAL_MIN_MS, REVEAL_BASE_MS + REVEAL_PER_CHAR_MS * wordLength));
+}
 function createSubtitleController(toggle, overlay) {
   let enabled = false;
-  let liveText = "";
+  let fullText = "";
+  let revealed = 0;
+  let started = false;
+  let complete = false;
+  let awaitingNewTurn = false;
+  let revealTimer;
   let holdTimer;
   let fadeClearTimer;
-  const cancelTimers = () => {
+  const cancelRevealTimer = () => {
+    if (revealTimer !== void 0) clearTimeout(revealTimer);
+    revealTimer = void 0;
+  };
+  const cancelFadeTimers = () => {
     if (holdTimer !== void 0) clearTimeout(holdTimer);
     if (fadeClearTimer !== void 0) clearTimeout(fadeClearTimer);
     holdTimer = void 0;
     fadeClearTimer = void 0;
   };
+  const resetState = () => {
+    fullText = "";
+    revealed = 0;
+    started = false;
+    complete = false;
+    awaitingNewTurn = false;
+  };
   const clearPresentation = () => {
-    liveText = "";
+    resetState();
+    overlay.textContent = "";
+    overlay.classList.remove("fading");
+    overlay.hidden = true;
+  };
+  const beginHoldFade = () => {
+    if (holdTimer !== void 0 || fadeClearTimer !== void 0) return;
+    awaitingNewTurn = true;
+    holdTimer = setTimeout(() => {
+      holdTimer = void 0;
+      overlay.classList.add("fading");
+      fadeClearTimer = setTimeout(() => {
+        fadeClearTimer = void 0;
+        clearPresentation();
+      }, FADE_MS);
+    }, HOLD_MS);
+  };
+  const showRevealed = () => {
+    overlay.textContent = fullText.slice(0, revealed);
+    overlay.classList.remove("fading");
+    overlay.hidden = false;
+  };
+  const pump = () => {
+    cancelRevealTimer();
+    if (!enabled || !started) return;
+    if (revealed >= fullText.length) {
+      if (complete) beginHoldFade();
+      return;
+    }
+    const boundary = nextWordBoundary(fullText, revealed);
+    const wordLength = fullText.slice(revealed, boundary).trim().length;
+    revealTimer = setTimeout(() => {
+      revealTimer = void 0;
+      revealed = boundary;
+      showRevealed();
+      pump();
+    }, revealDelayForWord(wordLength));
+  };
+  const startNewTurnIfNeeded = () => {
+    if (!awaitingNewTurn) return;
+    cancelRevealTimer();
+    cancelFadeTimers();
+    fullText = "";
+    revealed = 0;
+    started = false;
+    complete = false;
+    awaitingNewTurn = false;
     overlay.textContent = "";
     overlay.classList.remove("fading");
     overlay.hidden = true;
@@ -55,34 +126,43 @@ function createSubtitleController(toggle, overlay) {
     enabled = !enabled;
     toggle.setAttribute("aria-pressed", String(enabled));
     if (!enabled) {
-      cancelTimers();
+      cancelRevealTimer();
+      cancelFadeTimers();
       clearPresentation();
     }
   };
   return {
     setAgentSubtitle(text, final) {
       if (!enabled || !text) return;
-      cancelTimers();
-      overlay.classList.remove("fading");
-      liveText = final ? text : liveText + text;
-      overlay.textContent = liveText;
-      overlay.hidden = false;
+      startNewTurnIfNeeded();
+      cancelFadeTimers();
+      fullText = final ? text : fullText + text;
+      pump();
+    },
+    noteAgentSpeaking() {
+      startNewTurnIfNeeded();
+      cancelFadeTimers();
+      started = true;
+      if (revealTimer === void 0 && revealed < fullText.length) {
+        revealed = nextWordBoundary(fullText, revealed);
+        showRevealed();
+      }
+      pump();
+    },
+    noteAgentIdle() {
     },
     completeAgentSubtitle() {
-      liveText = "";
-      cancelTimers();
-      if (!enabled || overlay.hidden) return;
-      holdTimer = setTimeout(() => {
-        holdTimer = void 0;
-        overlay.classList.add("fading");
-        fadeClearTimer = setTimeout(() => {
-          fadeClearTimer = void 0;
-          clearPresentation();
-        }, 300);
-      }, 3e3);
+      complete = true;
+      if (!enabled || overlay.hidden && fullText.length === 0) {
+        resetState();
+        return;
+      }
+      started = true;
+      pump();
     },
     clearAgentSubtitle() {
-      cancelTimers();
+      cancelRevealTimer();
+      cancelFadeTimers();
       clearPresentation();
     }
   };
@@ -434,9 +514,16 @@ function renderDisplayView(root) {
     }
   };
 }
+var REVEAL_BASE_MS, REVEAL_PER_CHAR_MS, REVEAL_MIN_MS, REVEAL_MAX_MS, HOLD_MS, FADE_MS;
 var init_views = __esm({
   "src/views.ts"() {
     "use strict";
+    REVEAL_BASE_MS = 80;
+    REVEAL_PER_CHAR_MS = 38;
+    REVEAL_MIN_MS = 150;
+    REVEAL_MAX_MS = 460;
+    HOLD_MS = 2600;
+    FADE_MS = 300;
   }
 });
 
@@ -562,9 +649,11 @@ var require_main = __commonJS({
             break;
           case "avatar-speaking":
             this.setStatus("avatar", "speaking");
+            if (isSubtitleView(this.view)) this.view.noteAgentSpeaking();
             break;
           case "avatar-idle":
             this.setStatus("avatar", "idle");
+            if (isSubtitleView(this.view)) this.view.noteAgentIdle();
             break;
           case "response-done":
             this.setStatus("turn", "response done");

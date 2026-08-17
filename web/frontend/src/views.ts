@@ -33,6 +33,8 @@ export type InteractiveView = {
 
 export type SubtitleView = {
   setAgentSubtitle(text: string, final: boolean): void;
+  noteAgentSpeaking(): void;
+  noteAgentIdle(): void;
   completeAgentSubtitle(): void;
   clearAgentSubtitle(): void;
 };
@@ -79,21 +81,125 @@ function setText(element: HTMLElement, value: string) {
   element.textContent = value;
 }
 
+// Subtitles are revealed word-by-word, paced to a speech-rate estimate, instead of dumping
+// the whole transcript the instant it streams in (the spoken-audio transcript arrives far
+// faster than the avatar voices it). Design notes learned from tuning against the live avatar:
+//   - The reveal STARTS the moment the avatar begins speaking, showing the first word
+//     immediately so the caption is not a beat behind the voice.
+//   - We do NOT fade on `avatar-idle`: that event tracks the avatar's idle animation and
+//     fires during natural pauses, so it is an unreliable "done" signal and caused the caption
+//     to vanish mid-sentence. We also do not fade on `response-done` alone, since the model
+//     finishes generating text seconds before the avatar finishes voicing it.
+//   - Instead the caption fades only once the FULL line is on screen AND the response is
+//     complete, after a generous hold. Because the reveal is paced to roughly match speech,
+//     full-reveal lands near the end of the audio; the hold then covers any remaining tail.
+// Pacing is adaptive to word length so longer words linger, roughly tracking ~180 wpm speech.
+// These are deliberately a touch faster than average speech so the reveal keeps up with (and
+// finishes alongside) the voice rather than trailing behind it.
+const REVEAL_BASE_MS = 80; // fixed per-word cost
+const REVEAL_PER_CHAR_MS = 38; // added per character so longer words take longer
+const REVEAL_MIN_MS = 150;
+const REVEAL_MAX_MS = 460;
+const HOLD_MS = 2600; // how long the finished line lingers after the full text is shown
+const FADE_MS = 300;
+
+function nextWordBoundary(text: string, from: number): number {
+  let index = from;
+  while (index < text.length && text[index] === " ") index += 1;
+  while (index < text.length && text[index] !== " ") index += 1;
+  return index;
+}
+
+function revealDelayForWord(wordLength: number): number {
+  return Math.min(REVEAL_MAX_MS, Math.max(REVEAL_MIN_MS, REVEAL_BASE_MS + REVEAL_PER_CHAR_MS * wordLength));
+}
+
 function createSubtitleController(toggle: HTMLButtonElement, overlay: HTMLElement): SubtitleView {
   let enabled = false;
-  let liveText = "";
+  let fullText = ""; // authoritative transcript accumulated for the current turn
+  let revealed = 0; // characters of fullText currently shown
+  let started = false; // avatar has begun voicing this turn: the reveal may run
+  let complete = false; // response-done received: no more text is coming this turn
+  let awaitingNewTurn = false; // caption is holding/fading; next activity starts a new turn
+  let revealTimer: ReturnType<typeof setTimeout> | undefined;
   let holdTimer: ReturnType<typeof setTimeout> | undefined;
   let fadeClearTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const cancelTimers = () => {
+  const cancelRevealTimer = () => {
+    if (revealTimer !== undefined) clearTimeout(revealTimer);
+    revealTimer = undefined;
+  };
+
+  const cancelFadeTimers = () => {
     if (holdTimer !== undefined) clearTimeout(holdTimer);
     if (fadeClearTimer !== undefined) clearTimeout(fadeClearTimer);
     holdTimer = undefined;
     fadeClearTimer = undefined;
   };
 
+  const resetState = () => {
+    fullText = "";
+    revealed = 0;
+    started = false;
+    complete = false;
+    awaitingNewTurn = false;
+  };
+
   const clearPresentation = () => {
-    liveText = "";
+    resetState();
+    overlay.textContent = "";
+    overlay.classList.remove("fading");
+    overlay.hidden = true;
+  };
+
+  const beginHoldFade = () => {
+    if (holdTimer !== undefined || fadeClearTimer !== undefined) return;
+    awaitingNewTurn = true;
+    holdTimer = setTimeout(() => {
+      holdTimer = undefined;
+      overlay.classList.add("fading");
+      fadeClearTimer = setTimeout(() => {
+        fadeClearTimer = undefined;
+        clearPresentation();
+      }, FADE_MS);
+    }, HOLD_MS);
+  };
+
+  const showRevealed = () => {
+    overlay.textContent = fullText.slice(0, revealed);
+    overlay.classList.remove("fading");
+    overlay.hidden = false;
+  };
+
+  // Advance the caption one word and re-arm the timer. Once the whole line is shown and the
+  // response is complete, begin the hold + fade; otherwise wait for more text.
+  const pump = () => {
+    cancelRevealTimer();
+    if (!enabled || !started) return;
+    if (revealed >= fullText.length) {
+      if (complete) beginHoldFade();
+      return;
+    }
+    const boundary = nextWordBoundary(fullText, revealed);
+    const wordLength = fullText.slice(revealed, boundary).trim().length;
+    revealTimer = setTimeout(() => {
+      revealTimer = undefined;
+      revealed = boundary;
+      showRevealed();
+      pump();
+    }, revealDelayForWord(wordLength));
+  };
+
+  // A previous caption is holding/fading and fresh activity arrived: this is a new turn.
+  const startNewTurnIfNeeded = () => {
+    if (!awaitingNewTurn) return;
+    cancelRevealTimer();
+    cancelFadeTimers();
+    fullText = "";
+    revealed = 0;
+    started = false;
+    complete = false;
+    awaitingNewTurn = false;
     overlay.textContent = "";
     overlay.classList.remove("fading");
     overlay.hidden = true;
@@ -104,7 +210,8 @@ function createSubtitleController(toggle: HTMLButtonElement, overlay: HTMLElemen
     enabled = !enabled;
     toggle.setAttribute("aria-pressed", String(enabled));
     if (!enabled) {
-      cancelTimers();
+      cancelRevealTimer();
+      cancelFadeTimers();
       clearPresentation();
     }
   };
@@ -112,27 +219,40 @@ function createSubtitleController(toggle: HTMLButtonElement, overlay: HTMLElemen
   return {
     setAgentSubtitle(text, final) {
       if (!enabled || !text) return;
-      cancelTimers();
-      overlay.classList.remove("fading");
-      liveText = final ? text : liveText + text;
-      overlay.textContent = liveText;
-      overlay.hidden = false;
+      startNewTurnIfNeeded();
+      cancelFadeTimers();
+      fullText = final ? text : fullText + text;
+      pump();
+    },
+    noteAgentSpeaking() {
+      startNewTurnIfNeeded();
+      cancelFadeTimers();
+      started = true;
+      // Show the first word immediately so the caption tracks the voice from the first beat.
+      if (revealTimer === undefined && revealed < fullText.length) {
+        revealed = nextWordBoundary(fullText, revealed);
+        showRevealed();
+      }
+      pump();
+    },
+    noteAgentIdle() {
+      // Deliberately not used to fade: avatar-idle tracks the idle animation and fires during
+      // pauses, so it is an unreliable "the avatar has finished" signal. Fading is driven by
+      // full-reveal + response-done + hold instead.
     },
     completeAgentSubtitle() {
-      liveText = "";
-      cancelTimers();
-      if (!enabled || overlay.hidden) return;
-      holdTimer = setTimeout(() => {
-        holdTimer = undefined;
-        overlay.classList.add("fading");
-        fadeClearTimer = setTimeout(() => {
-          fadeClearTimer = undefined;
-          clearPresentation();
-        }, 300);
-      }, 3000);
+      complete = true;
+      if (!enabled || (overlay.hidden && fullText.length === 0)) {
+        resetState();
+        return;
+      }
+      // Ensure the tail can still reveal even if no further speaking event arrives.
+      started = true;
+      pump();
     },
     clearAgentSubtitle() {
-      cancelTimers();
+      cancelRevealTimer();
+      cancelFadeTimers();
       clearPresentation();
     },
   };
