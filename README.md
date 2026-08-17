@@ -193,7 +193,16 @@ azd env set AUTH_PASSWORD <password>
 azd up
 ```
 
-`azd up` provisions a Foundry account and project, a Linux App Service plan (B1), Application Insights, Log Analytics, and RBAC assignments, then builds the frontend and deploys the app. Out of the box it runs in **model mode** (`gpt-realtime`).
+`azd up` provisions a Foundry account and project, a Linux App Service plan (B1 by default), Application Insights, Log Analytics, and RBAC assignments, then builds the frontend and deploys the app. Out of the box it runs in **model mode** (`gpt-realtime`).
+
+**If provisioning fails with `No available instances to satisfy this request`**, the region is out of capacity for the requested App Service plan SKU. Pick a larger SKU (its capacity pool is separate) and retry — note the higher running cost:
+
+```bash
+azd env set APP_SERVICE_PLAN_SKU P0v3
+azd up
+```
+
+`APP_SERVICE_PLAN_SKU` defaults to `B1`; unset it again once the smaller SKU has capacity.
 
 **Optional agent mode:** create a Voice Live agent in the Azure AI Foundry portal, set its name in `config/agent.json`, then:
 
@@ -375,7 +384,7 @@ Reconnection is **operator-initiated**: on disconnect every view reveals a **Rec
 ### Azure deployment architecture
 
 - **Foundry account and project** — local authentication disabled; account- and project-level RBAC (no subscription-level role assignments).
-- **App Service** — Linux B1 plan, system-assigned managed identity, WebSockets enabled, always-on, TLS 1.2 minimum, health check path `/api/health`.
+- **App Service** — Linux plan (B1 by default, `APP_SERVICE_PLAN_SKU`), system-assigned managed identity, WebSockets enabled, always-on, TLS 1.2 minimum, health check path `/api/health`.
 - **Observability** — Log Analytics workspace, Application Insights connected to the workspace.
 - **RBAC** — managed identity assigned `Cognitive Services User` on the Foundry account and `Foundry User` on the Foundry project.
 - **`azure.yaml`** — `prebuild` hook runs `npm ci && npm run build` in `web/frontend`; `postprovision` hook runs `scripts/setup-agent.sh` to discover existing agents and print agent-mode setup instructions.

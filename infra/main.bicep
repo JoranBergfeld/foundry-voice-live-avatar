@@ -22,6 +22,9 @@ param apiVersion string = '2025-10-01'
 
 @description('Linux runtime; empty for self-contained deploy')
 param linuxFxVersion string = 'DOTNETCORE|10.0'
+
+@description('App Service plan SKU; raise this if the region reports no available instances')
+param appServicePlanSku string = 'B1'
 param resourceGroupName string = 'rg-${environmentName}'
 
 var token = uniqueString(subscription().id, environmentName, location)
@@ -45,6 +48,7 @@ module resources 'resources.bicep' = {
     voiceLiveMode: voiceLiveMode
     apiVersion: apiVersion
     linuxFxVersion: linuxFxVersion
+    appServicePlanSku: appServicePlanSku
   }
 }
 

@@ -7,6 +7,7 @@ param authPassword string
 param voiceLiveMode string
 param apiVersion string
 param linuxFxVersion string
+param appServicePlanSku string = 'B1'
 
 var aiName = 'ai${token}'
 var projectName = 'proj-default'
@@ -54,7 +55,7 @@ resource plan 'Microsoft.Web/serverfarms@2024-11-01' = {
   location: location
   tags: tags
   kind: 'linux'
-  sku: { name: 'B1' }
+  sku: { name: appServicePlanSku }
   properties: { reserved: true }
 }
 
