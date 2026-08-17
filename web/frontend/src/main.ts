@@ -154,9 +154,11 @@ class ThinVoiceLiveClient {
         break;
       case "avatar-speaking":
         this.setStatus("avatar", "speaking");
+        if (isSubtitleView(this.view)) this.view.noteAgentSpeaking();
         break;
       case "avatar-idle":
         this.setStatus("avatar", "idle");
+        if (isSubtitleView(this.view)) this.view.noteAgentIdle();
         break;
       case "response-done":
         this.setStatus("turn", "response done");

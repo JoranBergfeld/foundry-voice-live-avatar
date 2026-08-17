@@ -87,36 +87,41 @@ test("display exposes subtitles without enabling microphone controls", async ({ 
   expect((await inspectLifecycle(page)).getUserMediaCalls).toBe(0);
 });
 
-test("landing renders live agent subtitles through hold and fade", async ({ page }) => {
+test("landing reveals agent subtitles word-by-word in step with the avatar, then fades", async ({ page }) => {
   await page.clock.install();
   await page.goto("/");
   await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
   await page.getByRole("button", { name: "Subtitles" }).click();
   const subtitle = page.locator(".live-subtitle");
 
-  await sendServerFrame(page, { t: "agent-transcript", text: "Hel", final: false });
-  await sendServerFrame(page, { t: "agent-transcript", text: "lo", final: false });
+  // The spoken transcript streams in faster than the avatar voices it. Until the avatar
+  // actually starts speaking, no caption should appear (this is the core "not ahead" fix).
+  await sendServerFrame(page, { t: "agent-transcript", text: "Hello", final: false });
+  await sendServerFrame(page, { t: "agent-transcript", text: " there", final: false });
+  await page.clock.fastForward(2_000);
+  await expect(subtitle).toBeHidden();
+
+  // The moment the avatar starts speaking the first word appears immediately (no lag),
+  // then the rest is revealed word-by-word at the paced cadence.
+  await sendServerFrame(page, { t: "avatar-speaking" });
   await expect(subtitle).toHaveText("Hello");
   await expect(subtitle).toBeVisible();
-
-  await sendServerFrame(page, { t: "agent-transcript", text: "Hello there", final: true });
+  await page.clock.fastForward(600);
   await expect(subtitle).toHaveText("Hello there");
-  await page.clock.pauseAt(Date.now());
+
+  // response-done marks the text complete, but the avatar is still voicing audio. The caption
+  // must NOT fade on avatar-idle (an unreliable signal); it stays until full-reveal + hold.
+  await sendServerFrame(page, { t: "agent-transcript", text: "Hello there", final: true });
   await sendServerFrame(page, { t: "response-done" });
+  await sendServerFrame(page, { t: "avatar-idle" });
+  await page.clock.fastForward(2_000);
+  await sendServerFrame(page, { t: "avatar-idle" });
+  await page.clock.fastForward(1_000);
+  await expect(subtitle).toHaveText("Hello there");
+  await expect(subtitle).toBeVisible();
 
-  await page.clock.fastForward(2_999);
-  expect(await subtitle.evaluate((element) => ({
-    fading: element.classList.contains("fading"),
-    hidden: (element as HTMLElement).hidden,
-  }))).toEqual({ fading: false, hidden: false });
-
-  await page.clock.fastForward(1);
-  expect(await subtitle.evaluate((element) => ({
-    fading: element.classList.contains("fading"),
-    hidden: (element as HTMLElement).hidden,
-  }))).toEqual({ fading: true, hidden: false });
-
-  await page.clock.fastForward(300);
+  // The full line holds (3.2s) then fades and clears.
+  await page.clock.fastForward(4_000);
   await expect(subtitle).toBeHidden();
   await expect(subtitle).toHaveText("");
 });
@@ -129,13 +134,21 @@ test("new agent text cancels the pending subtitle fade and disabling hides immed
   const subtitle = page.locator(".live-subtitle");
   await toggle.click();
 
+  // First response reveals fully; once complete + shown it enters the post-turn hold.
+  await sendServerFrame(page, { t: "avatar-speaking" });
   await sendServerFrame(page, { t: "agent-transcript", text: "First", final: true });
+  await expect(subtitle).toHaveText("First");
   await sendServerFrame(page, { t: "response-done" });
+  // Within the hold window (before it fades).
   await page.clock.fastForward(1_000);
+
+  // A new turn arriving during the hold cancels the fade and starts fresh.
+  await sendServerFrame(page, { t: "avatar-speaking" });
   await sendServerFrame(page, { t: "agent-transcript", text: "Second", final: false });
+  await page.clock.fastForward(400);
 
   await expect(subtitle).toHaveText("Second");
-  await page.clock.fastForward(2_300);
+  await page.clock.fastForward(3_000);
   await expect(subtitle).toBeVisible();
   await expect(subtitle).not.toHaveClass(/fading/);
 
@@ -151,7 +164,9 @@ test("display receives agent subtitles across a clean reconnect without micropho
   const subtitle = page.locator(".live-subtitle");
   await toggle.click();
 
+  await sendServerFrame(page, { t: "avatar-speaking" });
   await sendServerFrame(page, { t: "agent-transcript", text: "Before disconnect", final: true });
+  await sendServerFrame(page, { t: "response-done" });
   await expect(subtitle).toHaveText("Before disconnect");
   await expect(subtitle).toBeVisible();
 
@@ -162,6 +177,7 @@ test("display receives agent subtitles across a clean reconnect without micropho
 
   await page.getByRole("button", { name: "Reconnect" }).click();
   await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(2);
+  await sendServerFrame(page, { t: "avatar-speaking" });
   await sendServerFrame(page, { t: "agent-transcript", text: "Fresh subtitle", final: false });
   await expect(subtitle).toHaveText("Fresh subtitle");
   await expect(subtitle).toBeVisible();
@@ -173,6 +189,7 @@ test("landing subtitle routing preserves transcript history", async ({ page }) =
   await expect.poll(async () => (await inspectLifecycle(page)).sockets.length).toBe(1);
   await page.getByRole("button", { name: "Subtitles" }).click();
 
+  await sendServerFrame(page, { t: "avatar-speaking" });
   await sendServerFrame(page, { t: "agent-transcript", text: "Shared transcript", final: true });
   await expect(page.locator(".live-subtitle")).toHaveText("Shared transcript");
 
